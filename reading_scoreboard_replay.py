@@ -1,6 +1,6 @@
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-import cv2 as cv
+import cv2
 import easyocr
 from skimage.metrics import structural_similarity as ssim
 import psycopg2
@@ -33,7 +33,7 @@ reader = easyocr.Reader(["en"], gpu=True)
 
 GAME_TIME_TEMPLATES = []
 HERO_PORTRAIT_TEMPLATES = []
-orb = cv.ORB_create(nfeatures=500)
+orb = cv2.ORB_create(nfeatures=500)
 
 conn = psycopg2.connect(host="localhost", port=5432, dbname="testing", user="postgres", password="pass")
 cur = conn.cursor()
@@ -112,24 +112,24 @@ def crop(image, box):
     return image[y1:y2, x1:x2]
 
 def enhance_image_name(gray):
-    gray = cv.resize(gray, None, fx=1.0, fy=1.0, interpolation=cv.INTER_CUBIC)
-    _, thresh = cv.threshold(gray, 180, 255, cv.THRESH_BINARY)
-    blurred = cv.GaussianBlur(thresh, (3, 3),  0)
-    blurred = cv.bitwise_not(blurred)
+    gray = cv2.resize(gray, None, fx=1.0, fy=1.0, interpolation=cv2.INTER_CUBIC)
+    _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+    blurred = cv2.GaussianBlur(thresh, (3, 3),  0)
+    blurred = cv2.bitwise_not(blurred)
     return blurred
 
 def enhance_image(gray):
-    gray = cv.resize(gray, None, fx=3.0, fy=3.0, interpolation=cv.INTER_CUBIC)
-    _, thresh = cv.threshold(gray, 180, 255, cv.THRESH_BINARY)
-    blurred = cv.GaussianBlur(thresh, (7, 7),  0)
-    blurred = cv.bitwise_not(blurred)
+    gray = cv2.resize(gray, None, fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
+    _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+    blurred = cv2.GaussianBlur(thresh, (7, 7),  0)
+    blurred = cv2.bitwise_not(blurred)
     return blurred
 
 def backup_enhance_image(gray):
-    gray = cv.resize(gray, None, fx=4.0, fy=4.0, interpolation=cv.INTER_CUBIC)
-    _, thresh = cv.threshold(gray, 180, 255, cv.THRESH_BINARY)
-    blurred = cv.GaussianBlur(thresh, (7, 7), 0)
-    blurred = cv.bitwise_not(blurred)
+    gray = cv2.resize(gray, None, fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)
+    _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+    blurred = cv2.GaussianBlur(thresh, (7, 7), 0)
+    blurred = cv2.bitwise_not(blurred)
     return blurred
 
 
@@ -188,8 +188,6 @@ def get_game_time(ss, previous_time):
     secs = ""
     for i in range(len(game_time_crop)):
         time_crop = ss[game_time_crop[i][2]:game_time_crop[i][3], game_time_crop[i][0]:game_time_crop[i][1]]
-        cv.imshow("f", time_crop)
-        cv.waitKey(0)
         number, number_probability = ssim_match(time_crop, GAME_TIME_TEMPLATES)
         if number_probability > 0.5:
             if i == 0 or i == 1:
@@ -280,7 +278,7 @@ def check_white_pixels(img, positions):
 
 
 for fname in os.listdir("./Images/Scoreboard Hero Icons"):
-    img = cv.imread(os.path.join("./Images/Scoreboard Hero Icons", fname), cv.IMREAD_GRAYSCALE)
+    img = cv2.imread(os.path.join("./Images/Scoreboard Hero Icons", fname), cv2.IMREAD_GRAYSCALE)
     kp, des = orb.detectAndCompute(img, None)
     HERO_PORTRAIT_TEMPLATES.append({
         "name": fname,
@@ -292,7 +290,7 @@ print(f"Loaded {len(HERO_PORTRAIT_TEMPLATES)} hero templates")
 
 
 for fname in os.listdir("./Images/Game Time Numbers"):
-    img = cv.imread(os.path.join("./Images/Game Time Numbers", fname), cv.IMREAD_GRAYSCALE)
+    img = cv2.imread(os.path.join("./Images/Game Time Numbers", fname), cv2.IMREAD_GRAYSCALE)
     GAME_TIME_TEMPLATES.append({
         "name": fname.strip(".png"),
         "img": img,
@@ -342,18 +340,21 @@ ORDER BY lt.match_map_id;
 """)
 all_replays = cur.fetchall()
 
-camera.start()
-game_running = True
-iteration = 4
 
+
+iteration = 0
+previous_time = 0
+previous_frame = []
+previous_layout = layouts["none"]
+
+game_running = True
+camera.start()
 time.sleep(10)
 
 pyautogui.keyDown('tab')
 time.sleep(1)
 pyautogui.press('p')
-previous_time = 0
-previous_frame = []
-previous_layout = layouts["none"]
+
 while game_running:
 
     image = camera.get_latest_frame()
@@ -369,7 +370,7 @@ while game_running:
                 insert_hero_stats(conn, all_replays[iteration][1], all_replays[iteration][0], player_accs[i].player_id,
                                   all_replays[iteration][4], all_replays[iteration][3], player_accs[i].finalize())
 
-    screenshot = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+    screenshot = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     match_time = get_game_time(screenshot, previous_time)
 
 
