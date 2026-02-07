@@ -35,13 +35,12 @@ class HeroAccumulator:
         self.spike_multiplier = 5
         self.fallback_delta = 2
 
-    def ingest(self, snap: Snapshot, player_id):
+    def ingest(self, snap: Snapshot):
         """Process a new CV snapshot."""
         # First frame
         if self.last_snapshot is None:
             self.current_hero = snap.hero
             self.last_snapshot = snap
-            self.player_id = player_id
             return
 
         # Compute deltas
@@ -71,6 +70,12 @@ class HeroAccumulator:
     def finalize(self):
         """Call at end of map. Returns DB-ready rows."""
         return deepcopy(self.hero_totals)
+
+    def set_player_id(self, player_id):
+        self.player_id = player_id
+
+    def get_player_id(self):
+        return self.player_id
 
     def get_current_hero(self):
         return self.current_hero

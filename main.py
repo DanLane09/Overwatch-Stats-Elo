@@ -1,7 +1,5 @@
 import psycopg2.extras
 from collections import Counter, defaultdict
-from math import ceil, log2
-import re
 import sys
 
 

@@ -238,7 +238,7 @@ CREATE TABLE player_hero_map_stats (
     damage INT DEFAULT 0,
     healing INT DEFAULT 0,
     mitigated INT DEFAULT 0,
-    UNIQUE (map_played_id, player_id, hero_id)
+    --UNIQUE (map_played_id, player_id, hero_id)
 );
 
 
