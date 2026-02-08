@@ -17,6 +17,8 @@ def ssim_match(crop, templates):
     best_name = None
 
     for t in templates:
+        """print(crop.shape)
+        print(t["img"].shape)"""
         score = ssim(crop, t["img"])
 
         if score > best_score:
@@ -40,13 +42,19 @@ def get_game_time(img_crop, previous_time, templates):
     if mins == "" or secs == "":
         return mins + secs
     else:
-        if previous_time % 10 == (7 or 8) and secs[1] == '6':
+        if previous_time % 10 in (7, 8) and secs[1] == '6':
             secs = secs[0] + '8'
         total_seconds = int(mins) * 60 + int(secs)
     return total_seconds
 
 
 def get_hero_name(img_crop, templates):
+    return ssim_match(img_crop, templates)
+
+def get_role(image, templates):
+    return ssim_match(image, templates)
+
+def get_perk(img_crop, templates):
     return ssim_match(img_crop, templates)
 
 
