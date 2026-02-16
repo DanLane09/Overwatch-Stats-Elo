@@ -197,7 +197,7 @@ for replay in replays:
         pyautogui.moveTo(1025, 624)
         pyautogui.leftClick()
     temp = True
-    time.sleep(15)
+    time.sleep(5)
     pyautogui.keyDown('tab')
     time.sleep(5)
     game_running = True
@@ -212,7 +212,7 @@ for replay in replays:
             for i in range(10):
                 team_id = replay[3] if i < 5 else replay[4]
                 name_img = crop(image=screenshot, box=CropPositions.layouts["none"].name_crop[i])
-                player_id, player_name = ReadText.read_name(img_crop=name_img, team_id=replay[3], reader=reader, cur=cur)
+                player_id, player_name = ReadText.read_name(img_crop=name_img, team_id=team_id, reader=reader, cur=cur)
                 player_accs[i].set_player_id(player_id)
 
 

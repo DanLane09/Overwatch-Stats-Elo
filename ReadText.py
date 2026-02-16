@@ -26,7 +26,6 @@ def lookup_player(name, team_id, cur):
 def read_name(img_crop, team_id, reader, cur):
     processed_img = preprocess_image(img_crop)
     name = reader.readtext(processed_img, allowlist='abcdefghijklmnopqrstuvwxyz0123456789', detail=0)[0]
-    print(name)
     if not name: return None
 
     return lookup_player(name, team_id, cur)
