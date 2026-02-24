@@ -69,7 +69,7 @@ def load_minor_perk_templates():
         for fname in os.listdir(path):
             img = cv2.imread(os.path.join(path, fname),  cv2.IMREAD_GRAYSCALE)
             templates.append({
-                "name": fname.strip(".png"),
+                "name": fname[:-4],
                 "img": img
             })
         all_templates[folder] = templates
@@ -84,7 +84,7 @@ def load_major_perk_templates():
         for fname in os.listdir(path):
             img = cv2.imread(os.path.join(path, fname),  cv2.IMREAD_GRAYSCALE)
             templates.append({
-                "name": fname.strip(".png"),
+                "name": fname[:-4],
                 "img": img
             })
         all_templates[folder] = templates

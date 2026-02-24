@@ -91,9 +91,9 @@ CREATE TABLE heroes (
 );
 INSERT INTO heroes (hero_name)
 VALUES
-('Ana'), ('Ashe'), ('Baptiste'), ('Bastion'), ('Brigitte'), ('Cassidy'), ('D.Va'), ('Doomfist'), ('Echo'), ('Freja'),
-('Genji'), ('Hanzo'), ('Hazard'), ('Illari'), ('Junker Queen'), ('Junkrat'), ('Juno'), ('Kiriko'), ('Lifeweaver'),
-('Lucio'), ('Mauga'), ('Mei'), ('Mercy'), ('Moira'), ('Orisa'), ('Pharah'), ('Ramattra'), ('Reaper'), ('Reinhardt'),
+('Ana'), ('Anran'), ('Ashe'), ('Baptiste'), ('Bastion'), ('Brigitte'), ('Cassidy'), ('D.Va'), ('Domina'), ('Doomfist'), ('Echo'), ('Emre'), ('Freja'),
+('Genji'), ('Hanzo'), ('Hazard'), ('Illari'), ('Jetpack Cat'), ('Junker Queen'), ('Junkrat'), ('Juno'), ('Kiriko'), ('Lifeweaver'),
+('Lucio'), ('Mauga'), ('Mei'), ('Mercy'), ('Mizuki'), ('Moira'), ('Orisa'), ('Pharah'), ('Ramattra'), ('Reaper'), ('Reinhardt'),
 ('Roadhog'), ('Sigma'), ('Sojourn'), ('Soldier: 76'), ('Sombra'), ('Symmetra'), ('Torbjorn'), ('Tracer'), ('Vendetta'),
 ('Venture'), ('Widowmaker'), ('Winston'), ('Wrecking Ball'), ('Wuyang'), ('Zarya'), ('Zenyatta');
 
@@ -134,8 +134,10 @@ CREATE TABLE match_maps (
     map_number INT NOT NULL,                       -- 1, 2, 3...
     map_id INT REFERENCES maps(map_id),
     replay_code VARCHAR(10),
-    team_a_score INT DEFAULT 0,
-    team_b_score INT DEFAULT 0,
+    left_team_id INT REFERENCES teams(team_id),
+    right_team_id INT REFERENCES teams(team_id),
+    left_team_score FLOAT DEFAULT 0,
+    right_team_score FLOAT DEFAULT 0,
     winner_id INT REFERENCES teams(team_id) ON DELETE CASCADE,
     first_ban_team INT REFERENCES teams(team_id) ON DELETE CASCADE,
     first_ban INT REFERENCES heroes(hero_id) ON DELETE CASCADE,
@@ -157,8 +159,8 @@ CREATE TABLE player_map_stats (
     assists INT DEFAULT 0,
     damage INT DEFAULT 0,
     healing INT DEFAULT 0,
-    mitigated INT DEFAULT 0
-    UNIQUE (match_id, player_id)
+    mitigated INT DEFAULT 0,
+    UNIQUE (map_played_id, player_id)
 );
 
 -- ===============================
@@ -177,7 +179,7 @@ CREATE TABLE player_match_stats (
     damage INT DEFAULT 0,
     healing INT DEFAULT 0,
     mitigated INT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (match_id, player_id)
 );
 
@@ -237,7 +239,7 @@ CREATE TABLE player_hero_map_stats (
     deaths INT DEFAULT 0,
     damage INT DEFAULT 0,
     healing INT DEFAULT 0,
-    mitigated INT DEFAULT 0,
+    mitigated INT DEFAULT 0
     --UNIQUE (map_played_id, player_id, hero_id)
 );
 

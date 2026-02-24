@@ -14,12 +14,13 @@ import CropPositions
 import LoadTemplates
 import MatchTemplates
 import ReadText
+import main
 
 
 camera = bettercam.create(output_color="RGB")
 reader = easyocr.Reader(["en"], gpu=True)
 
-conn = psycopg2.connect(host="localhost", port=5432, dbname="testing", user="postgres", password="pass")
+conn = psycopg2.connect(host="localhost", port=5432, dbname="ow_stats_elo", user="postgres", password="pass")
 cur = conn.cursor()
 
 
@@ -111,44 +112,14 @@ def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
 
 def get_replays():
     cur.execute("""
-    WITH losing_team AS (
-        SELECT
-            mm.match_id,
-            mm.match_map_id,
-            mm.replay_code,
-            mm.team_a_score,
-            mm.team_b_score,
-            mm.winner_id,
-            CASE
-                WHEN m.team_a_id = mm.winner_id THEN m.team_b_id
-                ELSE m.team_a_id
-            END AS loser_id
-        FROM match_maps mm
-        JOIN matches m
-            ON m.match_id = mm.match_id
-    )
-    SELECT
-        lt.match_id,
-        lt.match_map_id,
-        lt.replay_code,
-    
-        CASE
-            WHEN lt.team_a_score > lt.team_b_score THEN lt.winner_id
-            ELSE lt.loser_id
-        END AS team_a_id,
-    
-        CASE
-            WHEN lt.team_b_score > lt.team_a_score THEN lt.winner_id
-            ELSE lt.loser_id
-        END AS team_b_id
-    
-    FROM losing_team lt
+    SELECT mm.match_id, mm.match_map_id, mm.replay_code, mm.left_team_id, mm.right_team_id, mm.left_team_score, mm.right_team_score
+    FROM match_maps mm
     WHERE NOT EXISTS (
         SELECT 1
         FROM player_hero_map_stats phms
-        WHERE phms.map_played_id = lt.match_map_id
+        WHERE phms.map_played_id = mm.match_map_id
     )
-    ORDER BY lt.match_map_id;
+    ORDER BY mm.match_id, mm.match_map_id;
     """)
     all_replays = cur.fetchall()
     return all_replays
@@ -169,8 +140,13 @@ stats_templates = LoadTemplates.load_stat_templates()
 
 replays = get_replays()
 time.sleep(5)
-temp = False
-for replay in replays:
+temp = True
+for i in range (len(replays)):
+    replay = replays[i]
+    if i < len(replays) - 1:
+        next_replay = replays[i + 1]
+    else:
+        next_replay = None
     all_data = []
     previous_time = 0
     previous_frame = None
@@ -182,7 +158,7 @@ for replay in replays:
                    HeroAccumulator.HeroAccumulator(), HeroAccumulator.HeroAccumulator(),
                    HeroAccumulator.HeroAccumulator()]
     if temp:
-        pyautogui.moveTo(1750, 315)
+        pyautogui.moveTo(1750, 335)
         pyautogui.leftClick()
         time.sleep(1)
         pyautogui.write(replay[2])
@@ -199,7 +175,7 @@ for replay in replays:
     temp = True
     time.sleep(5)
     pyautogui.keyDown('tab')
-    time.sleep(5)
+    time.sleep(15)
     game_running = True
     camera.start()
     time.sleep(1)
@@ -221,14 +197,16 @@ for replay in replays:
             for i, acc in enumerate(player_accs):
                 team = get_team(i=i)
                 role = acc.get_role()
-
-                get_player_data(image = previous_frame, current_time=previous_time, player_acc=acc, current_layout=previous_layout,
+                stats = get_player_data(image = previous_frame, current_time=previous_time, player_acc=acc, current_layout=previous_layout,
                                 hero_templates=hero_templates[team][role], stat_templates=stats_templates, iteration=i, final=True)
+                main.add_player_map_stats(map_id=replay[1], match_id=replay[0], player_id=acc.get_player_id(), kills=int(stats[5]),
+                                        deaths=int(stats[7]), assists=int(stats[6]), damage=int(stats[8]), healing=int(stats[9]), mitigated=int(stats[10]))
 
             for i, acc in enumerate(player_accs):
                 opp_id = replay[4] if i < 5 else replay[3]
                 insert_hero_stats(conn=conn, map_id=replay[1], match_id=replay[0], player_id=acc.get_player_id(),
                                   opp_id=opp_id, hero_stats=acc.finalize())
+
 
         screenshot = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         match_time = MatchTemplates.get_game_time(img_crop=screenshot, previous_time=previous_time, templates=game_time_templates)
@@ -264,15 +242,28 @@ for replay in replays:
         previous_layout = layout
         print(temp_data)
 
+    if replay[0] != next_replay[0]:
+        main.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
 
     pyautogui.keyUp('tab')
     camera.stop()
 
+    cur.execute("""
+        SELECT name FROM teams WHERE team_id = %s;
+    """, (replay[3],))
+    first_name = cur.fetchone()[0]
 
-    with open(f'output_{replay[2]}.csv', 'w', newline='') as f:
+    cur.execute("""
+            SELECT name FROM teams WHERE team_id = %s;
+        """, (replay[4],))
+    second_name = cur.fetchone()[0]
+
+    with open(f'./Game CSVs/{first_name} vs {second_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(
             ['time', 'hero', 'player_id', 'ult_charged', 'minor_perk', 'major_perk', 'eliminations', 'assists', 'deaths', 'damage', 'healing', 'mitigated'])
         writer.writerows(all_data)
 
+    conn.commit()
     pyautogui.press("esc")
+    time.sleep(10)

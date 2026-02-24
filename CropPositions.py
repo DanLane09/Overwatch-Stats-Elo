@@ -25,7 +25,7 @@ game_end_check = [[350, 200], [450, 40], [1600, 750]]
 
 
 # The positions to crop the image in the format: [x_start, x_end, y_start, y_end]
-game_time_crop = [[1815, 1832, 34, 60], [1829, 1846, 34, 60], [1849, 1866, 34, 60], [1863, 1880, 34, 60]]
+game_time_crop = [[1815, 1832, 34, 60], [1830, 1847, 34, 60], [1850, 1867, 34, 60], [1863, 1880, 34, 60]]
 
 layouts = {
     "none": PerkLayout(
