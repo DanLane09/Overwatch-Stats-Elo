@@ -109,7 +109,7 @@ def create_match():
     match_type = str(input("Enter the match type: "))
     first_to = int(input("First to (e.g. 2, 3, 4): "))
     # version = input("Enter game version: ")
-    version = "2.21.0.0.146669"
+    version = "2.21.1.0.147739"
 
     if "." in offset:
         hours, minutes = offset.split(".")
@@ -318,7 +318,7 @@ def add_map():
         FROM matches m 
         JOIN teams ta ON ta.team_id = m.team_a_id 
         JOIN teams tb ON tb.team_id = m.team_b_id 
-        WHERE m.date_played BETWEEN NOW() - INTERVAL '1200 hours' AND NOW() + INTERVAL '1200 hours' ORDER BY m.date_played; 
+        WHERE m.date_played BETWEEN NOW() - INTERVAL '6 hours' AND NOW() + INTERVAL '6 hours' ORDER BY m.date_played; 
     """)
     all_soon_games = cur.fetchall()
     for i in range(len(all_soon_games)):
@@ -354,11 +354,6 @@ def add_map():
         left_team_id = team_b_id
         right_team_id = team_a_id
 
-    left_score = float(input("Left team score: "))
-    right_score = float(input("Right team score: "))
-
-    winner_id = get_map_winner(left_team_id, right_team_id, left_score, right_score)
-
     first_ban_team = int(input("Which team banned first: ")) + 1
     first_ban_team_id = all_soon_games[match_idx][first_ban_team + 2]
     cur.execute(""" 
@@ -368,6 +363,11 @@ def add_map():
     for i in range(len(all_heroes)): print(f"{i + 1}) {all_heroes[i][1]}")
     first_hero_ban_id = all_heroes[int(input("Which hero was banned first: ")) - 1][0]
     second_hero_ban_id = all_heroes[int(input("Which hero was banned second: ")) - 1][0]
+
+    left_score = float(input("Left team score: "))
+    right_score = float(input("Right team score: "))
+
+    winner_id = get_map_winner(left_team_id, right_team_id, left_score, right_score)
 
     cur.execute("""
         SELECT COUNT(*) FROM match_maps WHERE match_id = %s;

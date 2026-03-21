@@ -282,3 +282,7 @@ SELECT
     p.elo AS player_elo
 FROM players p
 JOIN teams t ON p.current_team_id = t.team_id;
+
+
+CREATE TABLE elo_checkpoints ( id SERIAL PRIMARY KEY, last_match_id INT REFERENCES matches(match_id), created_at TIMESTAMP DEFAULT NOW(), elo JSONB NOT NULL);
+ALTER TABLE elo_checkpoints ADD CONSTRAINT unique_match_checkpoint UNIQUE (last_match_id);

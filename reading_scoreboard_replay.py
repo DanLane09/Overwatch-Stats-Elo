@@ -112,14 +112,22 @@ def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
 
 def get_replays():
     cur.execute("""
-    SELECT mm.match_id, mm.match_map_id, mm.replay_code, mm.left_team_id, mm.right_team_id, mm.left_team_score, mm.right_team_score
-    FROM match_maps mm
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM player_hero_map_stats phms
-        WHERE phms.map_played_id = mm.match_map_id
-    )
-    ORDER BY mm.match_id, mm.match_map_id;
+        SELECT 
+            mm.match_id, 
+            mm.match_map_id, 
+            mm.replay_code, 
+            mm.left_team_id, 
+            mm.right_team_id, 
+            mm.left_team_score, 
+            mm.right_team_score
+        FROM match_maps mm
+        JOIN matches m ON mm.match_id = m.match_id
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM player_hero_map_stats phms
+            WHERE phms.map_played_id = mm.match_map_id
+        )
+        ORDER BY m.date_played, mm.match_id, mm.map_number;
     """)
     all_replays = cur.fetchall()
     return all_replays
@@ -141,8 +149,12 @@ stats_templates = LoadTemplates.load_stat_templates()
 replays = get_replays()
 time.sleep(5)
 temp = True
+valid = True
+prev_match_id = 1
 for i in range (len(replays)):
     replay = replays[i]
+    if i != 0 and prev_match_id != replay[0] and valid:
+        prev_match_id = replays[i - 1][0]
     if i < len(replays) - 1:
         next_replay = replays[i + 1]
     else:
@@ -169,6 +181,24 @@ for i in range (len(replays)):
         if replay_check[460, 1200][0] > 100:
             pyautogui.moveTo(960, 615)
             pyautogui.leftClick()
+            if replay[0] != next_replay[0]:
+                main.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
+            valid = False
+            if not valid:
+                cur.execute("""
+                    INSERT INTO elo_checkpoints (last_match_id, elo) 
+                    SELECT %s, jsonb_build_object(
+                        'players', COALESCE(
+                            (SELECT jsonb_object_agg(player_id, elo, matches_played, maps_played ORDER BY player_id) FROM players),
+                            '{}'::jsonb
+                        ),
+                        'teams', COALESCE(
+                            (SELECT jsonb_object_agg(team_id, elo, matches_played, maps_played ORDER BY team_id) FROM teams),
+                            '{}'::jsonb
+                        )
+                    )
+                    ON CONFLICT (last_match_id) DO NOTHING;
+                """, (prev_match_id,))
             continue
         pyautogui.moveTo(1025, 624)
         pyautogui.leftClick()
