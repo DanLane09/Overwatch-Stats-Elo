@@ -92,16 +92,8 @@ def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
                     player_id, match_id, map_played_id, opponent_team_id, hero_id, 
                     seconds_played, eliminations, assists, deaths, damage, healing, mitigated
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """#ON CONFLICT (map_played_id, player_id, hero_id)
-                #DO UPDATE SET
-                    #seconds_played = EXCLUDED.seconds_played,
-                    #eliminations = EXCLUDED.eliminations,
-                    #assists = EXCLUDED.assists,
-                    #deaths = EXCLUDED.deaths,
-                    #damage = EXCLUDED.damage,
-                    #healing = EXCLUDED.healing,
-                    #mitigated = EXCLUDED.mitigated;
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                """
             , (
                 player_id, match_id, map_id, opp_id, hero_id, stats["seconds"],
                 stats["eliminations"], stats["assists"], stats["deaths"],
@@ -127,6 +119,7 @@ def get_replays():
             FROM player_hero_map_stats phms
             WHERE phms.map_played_id = mm.match_map_id
         )
+        AND mm.replay_code != '[null]'
         ORDER BY m.date_played, mm.match_id, mm.map_number;
     """)
     all_replays = cur.fetchall()
@@ -147,14 +140,11 @@ stats_templates = LoadTemplates.load_stat_templates()
 
 
 replays = get_replays()
+print(replays)
 time.sleep(5)
-temp = True
-valid = True
-prev_match_id = 1
+temp = False
 for i in range (len(replays)):
     replay = replays[i]
-    if i != 0 and prev_match_id != replay[0] and valid:
-        prev_match_id = replays[i - 1][0]
     if i < len(replays) - 1:
         next_replay = replays[i + 1]
     else:
@@ -183,29 +173,18 @@ for i in range (len(replays)):
             pyautogui.leftClick()
             if replay[0] != next_replay[0]:
                 main.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
-            valid = False
-            if not valid:
-                cur.execute("""
-                    INSERT INTO elo_checkpoints (last_match_id, elo) 
-                    SELECT %s, jsonb_build_object(
-                        'players', COALESCE(
-                            (SELECT jsonb_object_agg(player_id, elo, matches_played, maps_played ORDER BY player_id) FROM players),
-                            '{}'::jsonb
-                        ),
-                        'teams', COALESCE(
-                            (SELECT jsonb_object_agg(team_id, elo, matches_played, maps_played ORDER BY team_id) FROM teams),
-                            '{}'::jsonb
-                        )
-                    )
-                    ON CONFLICT (last_match_id) DO NOTHING;
-                """, (prev_match_id,))
             continue
         pyautogui.moveTo(1025, 624)
         pyautogui.leftClick()
     temp = True
-    time.sleep(5)
+    print("Going in!")
+    time.sleep(10)
+    pyautogui.press(']')
+    pyautogui.press(']')
+    pyautogui.press(']')
+    pyautogui.press(']')
     pyautogui.keyDown('tab')
-    time.sleep(15)
+    time.sleep(5)
     game_running = True
     camera.start()
     time.sleep(1)
@@ -222,7 +201,7 @@ for i in range (len(replays)):
                 player_accs[i].set_player_id(player_id)
 
 
-        if (frame[40, 450] < 20).all():
+        if (frame[190, 810] < 20).all():
             game_running = False
             for i, acc in enumerate(player_accs):
                 team = get_team(i=i)
@@ -254,16 +233,19 @@ for i in range (len(replays)):
         temp_data = [match_time]
         for i, acc in enumerate(player_accs):
             team = get_team(i=i)
-            if acc.get_role() is None:
+            if acc.get_role() == "none":
                 role, score = MatchTemplates.get_role(crop(image=screenshot, box=layout.role_check[i]),
                                                       templates=role_templates[team])
                 if score > 0.5:
                     acc.set_role(role)
 
             role = acc.get_role()
-            stats = get_player_data(image=screenshot, current_time=match_time, player_acc=acc, current_layout=layout,
+            if role != "none":
+                stats = get_player_data(image=screenshot, current_time=match_time, player_acc=acc, current_layout=layout,
                                     hero_templates=hero_templates[team][role], stat_templates=stats_templates,
                                     iteration=i, final=False)
+            else:
+                stats = [None, acc.get_player_id(), False, None, None, 0, 0, 0, 0, 0, 0]
             temp_data.append(stats)
             all_data.append([match_time] + stats)
 

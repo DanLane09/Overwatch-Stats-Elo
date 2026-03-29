@@ -18,7 +18,7 @@ class HeroAccumulator:
         self.current_hero = None
         self.last_snapshot = None
         self.player_id = None
-        self.role = None
+        self.role = "none"
 
         # final per-hero totals (this maps 1:1 to DB rows)
         self.hero_totals = defaultdict(lambda: {

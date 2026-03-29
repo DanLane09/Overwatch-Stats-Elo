@@ -18,7 +18,6 @@ def ssim_match(crop, templates):
 
     for t in templates:
         score = ssim(crop, t["img"])
-        #print(f"{t["name"]}, {score}")
         if score > best_score:
             best_score = score
             best_name = t["name"]

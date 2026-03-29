@@ -78,6 +78,60 @@ def update_team_elo(winning_team_old_elo, losing_team_old_elo, actual_score, win
                 ("team", losing_team_id, losing_team_old_elo, losing_team_new_elo, match_id))
     conn.commit()
 
+    return winning_team_new_elo - winning_team_old_elo, losing_team_new_elo - losing_team_old_elo
+
+
+def update_player_elo(match_id, team_id, team_delta, total_maps):
+    cur.execute("""
+        SELECT p.player_id, p.role
+        FROM player_match_stats pms
+        JOIN players p ON p.player_id = pms.player_id
+        WHERE pms.match_id = %s AND pms.team_id = %s;
+    """, (match_id, team_id))
+
+    players = cur.fetchall()
+
+    player_scores = {}
+    total_score = 0
+
+    for player_id, role in players:
+        norm = get_normalized_match_stats(match_id, player_id)
+        if not norm:
+            continue
+
+        score = calculate_role_cps(
+            norm["eliminations"],
+            norm["deaths"],
+            norm["assists"],
+            norm["damage"],
+            norm["healing"],
+            norm["mitigated"],
+            role
+        )
+
+        score = max(score, 0.1)
+
+        participation = norm["maps"] / total_maps
+        participation_weight = 0.5 + 0.5 * participation
+
+        player_scores[player_id] = (score, participation_weight)
+        total_score += score
+
+    for player_id, (score, participation_weight) in player_scores.items():
+        weight = score / total_score
+        delta = team_delta * weight * participation_weight
+
+        cur.execute("SELECT elo FROM players WHERE player_id = %s;", (player_id,))
+        old_elo = cur.fetchone()[0] or 1000
+
+        new_elo = old_elo + delta
+
+        cur.execute("UPDATE players SET elo = %s WHERE player_id = %s;", (new_elo, player_id))
+        cur.execute("""
+            INSERT INTO elo_history (entity_type, entity_id, old_elo, new_elo, match_id)
+            VALUES (%s, %s, %s, %s, %s)
+        """, ("player", player_id, old_elo, new_elo, match_id))
+
 # =========================
 # Your existing functions for adding matches, teams, players, maps, players stats, transfers, complete_match
 # (I include them verbatim but with a small change: complete_match will call propagate_result at the end)
@@ -299,7 +353,7 @@ def complete_match(match_id, team_ids):
         cur.execute("SELECT elo FROM teams WHERE team_id = %s;", (losing_team_id,))
         losing_team_old_elo = cur.fetchone()[0]
 
-        update_team_elo(
+        winning_team_delta, losing_team_deltas = update_team_elo(
             winning_team_old_elo,
             losing_team_old_elo,
             actual_prob,
@@ -307,6 +361,11 @@ def complete_match(match_id, team_ids):
             losing_team_id,
             match_id
         )
+
+    total_maps = count_team_a + count_team_b
+
+    update_player_elo(match_id, winning_team_id, winning_team_delta, total_maps)
+    update_player_elo(match_id, losing_team_id, losing_team_deltas, total_maps)
 
     conn.commit()
     print(f"Completed match {match_id}")
@@ -318,7 +377,7 @@ def add_map():
         FROM matches m 
         JOIN teams ta ON ta.team_id = m.team_a_id 
         JOIN teams tb ON tb.team_id = m.team_b_id 
-        WHERE m.date_played BETWEEN NOW() - INTERVAL '6 hours' AND NOW() + INTERVAL '6 hours' ORDER BY m.date_played; 
+        WHERE m.date_played BETWEEN NOW() - INTERVAL '2 hours' AND NOW() + INTERVAL '2 hours' ORDER BY m.date_played; 
     """)
     all_soon_games = cur.fetchall()
     for i in range(len(all_soon_games)):
@@ -327,6 +386,9 @@ def add_map():
     match_id = all_soon_games[match_idx][0]
     team_a_id = all_soon_games[match_idx][4]
     team_b_id = all_soon_games[match_idx][5]
+
+    cur.execute("UPDATE teams SET maps_played = maps_played + 1 WHERE team_id = %s;", (team_a_id,))
+    cur.execute("UPDATE teams SET maps_played = maps_played + 1 WHERE team_id = %s;", (team_b_id,))
 
     cur.execute("SELECT map_type_id, map_type FROM map_types;")
     map_types = cur.fetchall()
@@ -340,13 +402,24 @@ def add_map():
         print(f"{i+1}) {m[1]}")
     map_id = maps[int(input("Map: ")) - 1][0]
 
-    replay_code = input("Replay code: ")
+    # replay_code = input("Replay code: ")
 
-    print("Which team was on LEFT side?")
     print(f"1) {all_soon_games[match_idx][2]}")
     print(f"2) {all_soon_games[match_idx][3]}")
-    left_choice = int(input("Left team: "))
+    first_ban_team = int(input("Which team banned first: ")) + 1
+    first_ban_team_id = all_soon_games[match_idx][first_ban_team + 2]
+    cur.execute(""" 
+            SELECT hero_id, hero_name FROM heroes; 
+        """)
+    all_heroes = cur.fetchall()
+    for i in range(len(all_heroes)): print(f"{i + 1}) {all_heroes[i][1]}")
+    first_hero_ban_id = all_heroes[int(input("Which hero was banned first: ")) - 1][0]
+    second_hero_ban_id = all_heroes[int(input("Which hero was banned second: ")) - 1][0]
 
+    print(f"1) {all_soon_games[match_idx][2]}")
+    print(f"2) {all_soon_games[match_idx][3]}")
+    print("Which team was on LEFT side?")
+    left_choice = int(input("Left team: "))
     if left_choice == 1:
         left_team_id = team_a_id
         right_team_id = team_b_id
@@ -354,18 +427,14 @@ def add_map():
         left_team_id = team_b_id
         right_team_id = team_a_id
 
-    first_ban_team = int(input("Which team banned first: ")) + 1
-    first_ban_team_id = all_soon_games[match_idx][first_ban_team + 2]
-    cur.execute(""" 
-        SELECT hero_id, hero_name FROM heroes; 
-    """)
-    all_heroes = cur.fetchall()
-    for i in range(len(all_heroes)): print(f"{i + 1}) {all_heroes[i][1]}")
-    first_hero_ban_id = all_heroes[int(input("Which hero was banned first: ")) - 1][0]
-    second_hero_ban_id = all_heroes[int(input("Which hero was banned second: ")) - 1][0]
+    cur.execute("""SELECT name FROM teams WHERE team_id = %s;""", (left_team_id,))
+    left_team_name = cur.fetchone()[0]
+    cur.execute("""SELECT name FROM teams WHERE team_id = %s;""", (right_team_id,))
+    right_team_name = cur.fetchone()[0]
 
-    left_score = float(input("Left team score: "))
-    right_score = float(input("Right team score: "))
+
+    left_score = float(input(f"{left_team_name} score: "))
+    right_score = float(input(f"{right_team_name} score: "))
 
     winner_id = get_map_winner(left_team_id, right_team_id, left_score, right_score)
 
@@ -376,15 +445,15 @@ def add_map():
 
     cur.execute("""
         INSERT INTO match_maps (
-            match_id, map_number, map_id, replay_code,
+            match_id, map_number, map_id,
             left_team_id, right_team_id,
             left_team_score, right_team_score,
             winner_id, first_ban_team, first_ban, second_ban
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING match_map_id;
     """, (
-        match_id, map_number, map_id, replay_code,
+        match_id, map_number, map_id,
         left_team_id, right_team_id,
         left_score, right_score,
         winner_id, first_ban_team_id, first_hero_ban_id, second_hero_ban_id
