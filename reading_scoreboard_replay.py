@@ -15,7 +15,7 @@ import LoadTemplates
 import MatchTemplates
 import ReadText
 import main
-import time_model_training
+from Experimental import time_model_training
 import torch
 
 
