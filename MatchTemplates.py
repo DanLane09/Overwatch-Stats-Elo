@@ -17,6 +17,7 @@ def ssim_match(crop, templates):
     best_name = None
 
     for t in templates:
+        # print(crop.shape, t["img"].shape)
         score = ssim(crop, t["img"])
         if score > best_score:
             best_score = score
@@ -68,7 +69,7 @@ class DigitMatch:
     height: int
 
 
-def match_digits(image, templates, threshold = 0.7):
+def match_digits(image, templates, threshold = 0.6):
     matches = []
     image = preprocess_image(image)
     for template in templates:
@@ -109,7 +110,7 @@ def non_max_suppression(matches, min_distance = 20):
     return kept
 
 
-def read_stat(img_crop, templates, threshold = 0.7):
+def read_stat(img_crop, templates, threshold = 0.6):
     matches = []
     image = preprocess_image(img_crop)
     for template in templates:

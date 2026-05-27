@@ -15,12 +15,14 @@ import LoadTemplates
 import MatchTemplates
 import ReadText
 import main
+import time_model_training
+import torch
 
 
 camera = bettercam.create(output_color="RGB")
 reader = easyocr.Reader(["en"], gpu=True)
 
-conn = psycopg2.connect(host="localhost", port=5432, dbname="ow_stats_elo", user="postgres", password="pass")
+conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
 cur = conn.cursor()
 
 
@@ -68,6 +70,13 @@ def get_player_data(image, current_time, player_acc, current_layout: CropPositio
         "mitigated": MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.mitigated_crop[iteration]), templates=stat_templates),
     }
 
+    for key, value in numbers.items():
+        if value == "":
+            numbers[key] = player_acc.last_stats[key]
+        else:
+            numbers[key] = int(value)  # normalise type
+            player_acc.last_stats[key] = numbers[key]
+
     snap = HeroAccumulator.Snapshot(
             game_time=current_time,
             hero=hero_name,
@@ -80,7 +89,7 @@ def get_player_data(image, current_time, player_acc, current_layout: CropPositio
     return [hero_name, player_acc.get_player_id(), ult_charged, minor_perk, major_perk, *numbers.values()]
 
 
-def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
+def insert_hero_stats(conn, map_id, player_id, team_id, opp_id, hero_stats):
     with conn.cursor() as cur:
         for hero, stats in hero_stats.items():
             cur.execute("""
@@ -89,13 +98,13 @@ def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
             hero_id = cur.fetchone()[0]
             cur.execute("""
                 INSERT INTO player_hero_map_stats (
-                    player_id, match_id, map_played_id, opponent_team_id, hero_id, 
+                    player_id, map_played_id, team_id, opponent_id, hero_id, 
                     seconds_played, eliminations, assists, deaths, damage, healing, mitigated
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """
             , (
-                player_id, match_id, map_id, opp_id, hero_id, stats["seconds"],
+                player_id, map_id, team_id, opp_id, hero_id, stats["seconds"],
                 stats["eliminations"], stats["assists"], stats["deaths"],
                 stats["damage"], stats["healing"], stats["mitigated"]
             ))
@@ -105,22 +114,23 @@ def insert_hero_stats(conn, map_id, match_id, player_id, opp_id, hero_stats):
 def get_replays():
     cur.execute("""
         SELECT 
-            mm.match_id, 
-            mm.match_map_id, 
-            mm.replay_code, 
-            mm.left_team_id, 
-            mm.right_team_id, 
-            mm.left_team_score, 
-            mm.right_team_score
-        FROM match_maps mm
-        JOIN matches m ON mm.match_id = m.match_id
+            mp.match_id, 
+            mp.map_played_id, 
+            mp.replay_code, 
+            mp.blue_team_id, 
+            mp.red_team_id, 
+            mp.blue_team_score, 
+            mp.red_team_score
+        FROM maps_played mp
+        JOIN matches m ON mp.match_id = m.match_id
         WHERE NOT EXISTS (
             SELECT 1
             FROM player_hero_map_stats phms
-            WHERE phms.map_played_id = mm.match_map_id
+            WHERE phms.map_played_id = mp.map_played_id
         )
-        AND mm.replay_code != '[null]'
-        ORDER BY m.date_played, mm.match_id, mm.map_number;
+        AND mp.replay_code != '[null]'
+        AND m.game_version = '2.22.1.0.149597'
+        ORDER BY m.date_played, mp.match_id, mp.map_number;
     """)
     all_replays = cur.fetchall()
     return all_replays
@@ -140,6 +150,7 @@ stats_templates = LoadTemplates.load_stat_templates()
 
 
 replays = get_replays()
+print(len(replays))
 print(replays)
 time.sleep(5)
 temp = False
@@ -148,7 +159,7 @@ for i in range (len(replays)):
     if i < len(replays) - 1:
         next_replay = replays[i + 1]
     else:
-        next_replay = None
+        next_replay = ["0"]
     all_data = []
     previous_time = 0
     previous_frame = None
@@ -177,20 +188,21 @@ for i in range (len(replays)):
         pyautogui.moveTo(1025, 624)
         pyautogui.leftClick()
     temp = True
-    print("Going in!")
+    print(f"Going in! {replay[2]}")
     time.sleep(10)
-    pyautogui.press(']')
-    pyautogui.press(']')
-    pyautogui.press(']')
-    pyautogui.press(']')
-    pyautogui.keyDown('tab')
+    #pyautogui.press(']')
+    #pyautogui.press(']')
+    #pyautogui.press(']')
+    #pyautogui.press(']')
     time.sleep(5)
     game_running = True
     camera.start()
     time.sleep(1)
+    counter = 0
     while game_running:
-
+        pyautogui.keyDown('tab')
         frame = camera.get_latest_frame()
+        pyautogui.keyUp('tab')
 
         if previous_frame is None:
             screenshot = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -201,7 +213,7 @@ for i in range (len(replays)):
                 player_accs[i].set_player_id(player_id)
 
 
-        if (frame[190, 810] < 20).all():
+        if (frame[170, 810] < 30).all():
             game_running = False
             for i, acc in enumerate(player_accs):
                 team = get_team(i=i)
@@ -212,13 +224,25 @@ for i in range (len(replays)):
                                         deaths=int(stats[7]), assists=int(stats[6]), damage=int(stats[8]), healing=int(stats[9]), mitigated=int(stats[10]))
 
             for i, acc in enumerate(player_accs):
+                team_id = replay[4] if i > 4 else replay[3]
                 opp_id = replay[4] if i < 5 else replay[3]
-                insert_hero_stats(conn=conn, map_id=replay[1], match_id=replay[0], player_id=acc.get_player_id(),
-                                  opp_id=opp_id, hero_stats=acc.finalize())
+                insert_hero_stats(conn=conn, map_id=replay[1], player_id=acc.get_player_id(),
+                                  team_id=team_id, opp_id=opp_id, hero_stats=acc.finalize())
 
 
         screenshot = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        match_time = MatchTemplates.get_game_time(img_crop=screenshot, previous_time=previous_time, templates=game_time_templates)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = time_model_training.TimerOCR()
+        model.load_state_dict(torch.load("./ReadTimeModel.pth"))
+        model.to(device).eval()
+        timer = time_model_training.predict(model=model, image_path=crop(image=frame, box=CropPositions.testing_time_crop))
+        mins = timer[0:2]
+        secs = timer[2:4]
+        if mins == "" or secs == "":
+            match_time = previous_time
+        else:
+            match_time = (int(mins) * 60) + int(secs)
         if match_time == "":
             continue
 
@@ -248,6 +272,7 @@ for i in range (len(replays)):
                 stats = [None, acc.get_player_id(), False, None, None, 0, 0, 0, 0, 0, 0]
             temp_data.append(stats)
             all_data.append([match_time] + stats)
+            counter += 1
 
         previous_frame = screenshot
         previous_time = match_time
@@ -257,7 +282,7 @@ for i in range (len(replays)):
     if replay[0] != next_replay[0]:
         main.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
 
-    pyautogui.keyUp('tab')
+    #pyautogui.keyUp('tab')
     camera.stop()
 
     cur.execute("""

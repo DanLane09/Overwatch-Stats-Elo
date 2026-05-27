@@ -36,6 +36,15 @@ class HeroAccumulator:
         self.spike_multiplier = 5
         self.fallback_delta = 2
 
+        self.last_stats = {
+            "eliminations": 0,
+            "assists": 0,
+            "deaths": 0,
+            "damage": 0,
+            "healing": 0,
+            "mitigated": 0,
+        }
+
     def ingest(self, snap: Snapshot):
         """Process a new CV snapshot."""
         # First frame
