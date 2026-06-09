@@ -27,7 +27,6 @@ def add_start_date(start_date: date, query: str, params: list) -> tuple:
         params.append(start_dt)
     return query, params
 
-
 def add_end_date(end_date: date, query: str, params: list) -> tuple:
     if end_date:
         _, end_dt = date_to_utc_range(end_date)
@@ -35,13 +34,11 @@ def add_end_date(end_date: date, query: str, params: list) -> tuple:
         params.append(end_dt)
     return query, params
 
-
 def add_map_id(map_id: int, query: str, params: list) -> tuple:
     if map_id:
         query += " AND mp.map_id = %s"
         params.append(map_id)
     return query, params
-
 
 def add_map_played_id(map_played_id: int, query: str, params: list) -> tuple:
     if map_played_id:
@@ -49,13 +46,11 @@ def add_map_played_id(map_played_id: int, query: str, params: list) -> tuple:
         params.append(map_played_id)
     return query, params
 
-
 def add_match_id(match_id: int, query: str, params: list) -> tuple:
     if match_id:
         query += " AND m.match_id = %s"
         params.append(match_id)
     return query, params
-
 
 def add_tournament_id(tournament_id: int, query: str, params: list) -> tuple:
     if tournament_id:
@@ -63,14 +58,11 @@ def add_tournament_id(tournament_id: int, query: str, params: list) -> tuple:
         params.append(tournament_id)
     return query, params
 
-
-# FIXED: Added table_alias to support different baseline telemetry tables
 def add_team_id(team_id: int, query: str, params: list, table_alias: str = "pts") -> tuple:
     if team_id:
         query += f" AND {table_alias}.team_id = %s"
         params.append(team_id)
     return query, params
-
 
 def add_opponent_id_basic(opponent_id: int, query: str, params: list, table_alias: str = "pms") -> tuple:
     if opponent_id:
@@ -78,8 +70,6 @@ def add_opponent_id_basic(opponent_id: int, query: str, params: list, table_alia
         params.append(opponent_id)
     return query, params
 
-
-# FIXED: Added table_alias to handle alternative context tables cleanly
 def add_opponent_id_by_compare(opponent_id: int, query: str, params: list, table_alias: str = "pts") -> tuple:
     if opponent_id:
         query += f" AND ((mp.blue_team_id = {table_alias}.team_id AND mp.red_team_id = %s) OR (mp.red_team_id = {table_alias}.team_id AND mp.blue_team_id = %s))"
@@ -189,7 +179,6 @@ def hero_fight_winrate(
     stats_query, params = add_match_id(match_id, stats_query, params)
     stats_query, params = add_tournament_id(tournament_id, stats_query, params)
 
-    # Uses default "pts" alias
     stats_query, params = add_team_id(team_id, stats_query, params, table_alias="pts")
     stats_query, params = add_opponent_id_by_compare(opponent_id, stats_query, params, table_alias="pts")
 
@@ -282,7 +271,6 @@ def hero_playtime(
     shared_filters, params = add_match_id(match_id, shared_filters, params)
     shared_filters, params = add_tournament_id(tournament_id, shared_filters, params)
 
-    # Passing "phms" explicitly fixes the runtime mapping error
     shared_filters, params = add_team_id(team_id, shared_filters, params, table_alias="phms")
     shared_filters, params = add_opponent_id_by_compare(opponent_id, shared_filters, params, table_alias="phms")
 
@@ -365,7 +353,6 @@ def hero_scoreboard(
     response_filter, params = add_match_id(match_id, response_filter, params)
     response_filter, params = add_tournament_id(tournament_id, response_filter, params)
 
-    # Passing "phms" explicitly fixes the query composition context
     response_filter, params = add_team_id(team_id, response_filter, params, table_alias="phms")
     response_filter, params = add_opponent_id_by_compare(opponent_id, response_filter, params, table_alias="phms")
 
@@ -407,7 +394,6 @@ def hero_ultimate_usage(
         team_id: Optional[int] = None,
         opponent_id: Optional[int] = None,
 ):
-    # FIXED: standardizing the event alias to "ev" inside both SQL chunks
     charge_query = """
         WITH filtered_stats AS (
             SELECT 
@@ -463,7 +449,6 @@ def hero_ultimate_usage(
     filter_string, filter_params = add_match_id(match_id, filter_string, filter_params)
     filter_string, filter_params = add_tournament_id(tournament_id, filter_string, filter_params)
 
-    # FIXED: Passing unified "ev" alias so it targets both queries gracefully
     filter_string, filter_params = add_team_id(team_id, filter_string, filter_params, table_alias="ev")
     filter_string, filter_params = add_opponent_id_by_compare(opponent_id, filter_string, filter_params,
                                                               table_alias="ev")
