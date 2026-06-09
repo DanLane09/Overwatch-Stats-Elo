@@ -168,6 +168,7 @@ CREATE TABLE player_timeseries (
     id BIGSERIAL PRIMARY KEY,
     map_played_id INT REFERENCES maps_played(map_played_id),
     player_id INT REFERENCES players(player_id),
+    team_id INT REFERENCES teams(team_id),
     time_seconds FLOAT,
     hero_id INT REFERENCES heroes(hero_id),
     minor_perk TEXT DEFAULT NULL,
