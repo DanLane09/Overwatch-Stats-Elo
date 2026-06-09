@@ -201,6 +201,7 @@ for i in range (len(replays)):
     counter = 0
     while game_running:
         pyautogui.keyDown('tab')
+        time.sleep(0.05)
         frame = camera.get_latest_frame()
         pyautogui.keyUp('tab')
 

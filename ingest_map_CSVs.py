@@ -304,7 +304,10 @@ def process_and_save_hero_swaps(df: pd.DataFrame,map_id: int) -> None:
     swaps = df[
         ((df["hero_id"].notna()) &
         (df["hero_id"] != df["prev_hero_id"])) |
-        (df["time_seconds"] == 0)
+        ((df["time_seconds"] == 0) &
+        (df["hero_id"].notna())) |
+        ((df["prev_hero_id"].isna()) &
+         (df["hero_id"].notna()))
         ]
 
     swap_events = [
@@ -463,13 +466,13 @@ def ingest_to_db(path) -> None:
                 detect_team_fights(df=df, map_played_id=map_played_id)
 
                 # Creating DataFrame to pass to database
-                #cols = ["map_played_id", "player_id", "time_seconds", "hero_id", "minor_perk", "major_perk", "ult_used", "eliminations_delta", "assists_delta", "deaths_delta", "damage_delta", "healing_delta", "mitigated_delta", "team_id"]
-                #final_df = df[cols]
-                #ingest_timeseries(df=final_df, table_name="player_timeseries")
+                cols = ["map_played_id", "player_id", "time_seconds", "hero_id", "minor_perk", "major_perk", "ult_used", "eliminations_delta", "assists_delta", "deaths_delta", "damage_delta", "healing_delta", "mitigated_delta", "team_id"]
+                final_df = df[cols]
+                ingest_timeseries(df=final_df, table_name="player_timeseries")
                 conn.commit()
 
             # Move processed map to different folder
-            #shutil.move(file.path, "../Game CSVs/Processed/")
+            shutil.move(file.path, "./Game CSVs/Processed/")
             print(f"Ingested {f.name}")
 
 
