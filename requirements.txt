@@ -1,7 +1,17 @@
 bettercam==1.0.0
 easyocr==1.7.2
+fastapi==0.138.2
+feedparser==6.0.12
+numpy==2.5.0
 opencv_contrib_python==4.10.0.84
+pandas==3.0.4
+Pillow==12.2.0
 psycopg2==2.9.10
 psycopg2_binary==2.9.11
 PyAutoGUI==0.9.54
+rapidfuzz==3.14.5
+scikit_learn==1.9.0
 skimage==0.0
+SQLAlchemy==2.0.51
+streamlit==1.58.0
+torch==2.5.1
