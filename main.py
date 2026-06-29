@@ -134,10 +134,6 @@ def update_player_elo(match_id, team_id, team_delta, total_maps):
             VALUES (%s, %s, %s, %s)
         """, (player_id, old_elo, new_elo, "match:" + str(match_id)))
 
-# =========================
-# Your existing functions for adding matches, teams, players, maps, players stats, transfers, complete_match
-# (I include them verbatim but with a small change: complete_match will call propagate_result at the end)
-# =========================
 
 def create_match():
     cur.execute("""
@@ -165,7 +161,7 @@ def create_match():
     match_type = str(input("Enter the match type: "))
     first_to = int(input("First to (e.g. 2, 3, 4): "))
     # version = input("Enter game version: ")
-    version = "2.22.1.0.149597"
+    version = "2.22.1.1.149872"
 
     if "." in offset:
         hours, minutes = offset.split(".")
@@ -324,7 +320,6 @@ def complete_match(match_id, team_ids):
         WHERE match_id = %s;
     """, (winning_team_id, losing_team_id, count_team_a, count_team_b, match_id))
 
-    # increment matches played
     """for tid in team_ids:
         cur.execute("UPDATE teams SET matches_played = matches_played + 1 WHERE team_id = %s;", (tid,))
 
@@ -332,7 +327,6 @@ def complete_match(match_id, team_ids):
     for (pid,) in cur.fetchall():
         cur.execute("UPDATE players SET matches_played = matches_played + 1 WHERE player_id = %s;", (pid,))
 """
-    # --- TEAM ELO ---
     cur.execute("SELECT first_to FROM matches WHERE match_id = %s;", (match_id,))
     first_to = cur.fetchone()[0]
 
@@ -379,7 +373,7 @@ def add_map():
         FROM matches m 
         JOIN teams ta ON ta.team_id = m.upper_seed_team_id 
         JOIN teams tb ON tb.team_id = m.lower_seed_team_id 
-        WHERE m.date_played BETWEEN NOW() - INTERVAL '72 hours' AND NOW() + INTERVAL '2 hours' ORDER BY m.date_played; 
+        WHERE m.date_played BETWEEN NOW() - INTERVAL '2 hours' AND NOW() + INTERVAL '2 hours' ORDER BY m.date_played; 
     """)
     all_soon_games = cur.fetchall()
     for i in range(len(all_soon_games)):

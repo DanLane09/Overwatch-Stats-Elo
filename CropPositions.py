@@ -1,35 +1,43 @@
 from dataclasses import dataclass
+from typing import List
 
 @dataclass(frozen=True)
 class PerkLayout:
-    role_check: list
-    ult_check: list
-    hero_crop: list
-    name_crop: list
-    minor_perk_crop: list
-    major_perk_crop: list
-    eliminations_crop: list
-    assists_crop: list
-    deaths_crop: list
-    damage_crop: list
-    healing_crop: list
-    mitigated_crop: list
+    """
+    Data structure holding the screen coordinate bounding boxes for various UI components on the game scoreboard.
+    Coordinates change dynamically depending on whether players have activated minor or major perks, which shifts the
+    alignment of elements on the screen.
+    """
+    role_check: List[List[int]]
+    ult_check: List[List[int]]
+    hero_crop: List[List[int]]
+    name_crop: List[List[int]]
+    minor_perk_crop: List[List[int]]
+    major_perk_crop: List[List[int]]
+    eliminations_crop: List[List[int]]
+    assists_crop: List[List[int]]
+    deaths_crop: List[List[int]]
+    damage_crop: List[List[int]]
+    healing_crop: List[List[int]]
+    mitigated_crop: List[List[int]]
 
 
-# The [x, y] position to check for a white (perks) or black (end of game) pixel
+# Pixel coordinates [x, y] to scan for white or black pixels used to determine the active layout/game end
 minor_perk_positions = [[884, 202], [884, 268], [884, 334], [884, 400], [884, 466],
                         [884, 608], [884, 674], [884, 740], [884, 806], [884, 872]]
 major_perk_positions = [[855, 202], [855, 268], [855, 334], [855, 400], [855, 466],
                         [855, 608], [855, 674], [855, 740], [855, 806], [855, 872]]
 game_end_check = [[635, 170], [635, 170], [635, 170]]
 
+# Standard image cropping format used across layouts: [x_start, x_end, y_start, y_end]
 
 # The positions to crop the image in the format: [x_start, x_end, y_start, y_end]
-game_time_crop = [[1822, 1837, 32, 57], [1836, 1851, 32, 57], [1855, 1870, 32, 57], [1869, 1884, 32, 57]]
-testing_time_crop = [1820, 1890, 32, 57]
+time_crop = [1820, 1890, 32, 57]
 
+# Dictionary defining coordinate configurations for all 10 players (5 blue, 5 red).
 layouts = {
     "none": PerkLayout(
+        # Coordinates when NO perks are active on the scoreboard screen
         role_check = [[551, 578, 189, 252], [551, 578, 255, 318], [551, 578, 321, 384], [551, 578, 387, 450], [551, 578, 453, 516],
                       [551, 578, 595, 658], [551, 578, 661, 724], [551, 578, 727, 790], [551, 578, 793, 856], [551, 578, 859, 922]],
         ult_check = [[632, 210], [632, 275], [632, 342], [632, 407], [632, 474],
@@ -54,6 +62,7 @@ layouts = {
                           [1245, 1325, 620, 634], [1245, 1325, 686, 700], [1245, 1325, 752, 766], [1245, 1325, 818, 832], [1245, 1325, 884, 898]],
     ),
     "minor": PerkLayout(
+        # Coordinates shifted leftward slightly to accommodate the inclusion of a Minor Perk icon columns
         role_check = [[530, 557, 189, 252], [530, 557, 255, 318], [530, 557, 321, 384], [530, 557, 387, 450], [530, 557, 453, 516],
                       [530, 557, 595, 658], [530, 557, 661, 724], [530, 557, 727, 790], [530, 557, 793, 856], [530, 557, 859, 922]],
         ult_check = [[650, 210], [650, 275], [650, 342], [650, 407], [650, 474],
@@ -79,6 +88,7 @@ layouts = {
                           [1265, 1350, 620, 634], [1265, 1350, 686, 700], [1265, 1350, 752, 766], [1265, 1350, 818, 832], [1265, 1350, 884, 898]],
     ),
     "major": PerkLayout(
+        # Coordinates shifted significantly leftward to clear space for both Minor and Major Perk icon columns
         role_check = [[501, 528, 189, 252], [501, 528, 255, 318], [501, 528, 321, 384], [501, 528, 387, 450], [501, 528, 453, 516],
                       [501, 528, 595, 658], [501, 528, 661, 724], [501, 528, 727, 790], [501, 528, 793, 856], [501, 528, 859, 922]],
         ult_check = [[618, 210], [618, 275], [618, 342], [618, 407], [618, 474],

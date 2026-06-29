@@ -70,15 +70,10 @@ def detect_ult_usage(df) -> pd.DataFrame:
 
 
 def detect_rounds(df: pd.DataFrame, map_played_id: int) -> list:
-    """
-    Identifies round starts based on high snapshot density (>50 entries at one timestamp).
-    Saves them to the database and returns a list of round start times.
-    """
     counts = df.groupby('time').size()
     # Filter times with more than 50 snapshots
     round_starts = counts[counts > 50].index.tolist()
 
-    # Save to database
     for i, start_time in enumerate(round_starts):
         cur.execute("""
             INSERT INTO fact_round_start_events (map_played_id, round_number, start_time)
@@ -90,26 +85,22 @@ def detect_rounds(df: pd.DataFrame, map_played_id: int) -> list:
 
 
 def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
-    """
-    Uses DBSCAN to cluster deaths and ultimate usages into cohesive team fights.
-    """
     # Filter for 'Action Events'
     intensity_mask = (
             (df['deaths_delta'] > 0) |
             (df['ult_used'] == True) |
             (df['eliminations_delta'] > 0) |
             (df['assists_delta'] > 0) |
-            (df['damage_delta'] > 75) |  # Trigger if > 150 damage in a single snapshot
-            (df['healing_delta'] > 75) |  # Trigger if > 100 healing in a single snapshot
-            (df['mitigated_delta'] > 75)  # Trigger if > 150 mitigated in a single snapshot
+            (df['damage_delta'] > 75) |
+            (df['healing_delta'] > 75) |
+            (df['mitigated_delta'] > 75)
     )
     action_events = df[intensity_mask].copy()
 
     if action_events.empty:
         return
 
-    # Prepare data for DBSCAN (clustering based on time_seconds)
-    # We reshape to (-1, 1) because DBSCAN expects a 2D array
+    # Reshape to (-1, 1) because DBSCAN expects a 2D array
     X = action_events['time_seconds'].values.reshape(-1, 1)
 
     # eps=4: Events within 4 seconds of each other belong to the same cluster
@@ -129,20 +120,14 @@ def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
         start_time = fight_df["time_seconds"].min()
         end_time = fight_df["time_seconds"].max()
 
-        # ----------------------------------------
         # TEAM KILLS
-        # ----------------------------------------
-
         team_kills = (
             fight_df.groupby("team_id")["eliminations_delta"]
             .sum()
             .to_dict()
         )
 
-        # ----------------------------------------
         # TEAM DAMAGE
-        # ----------------------------------------
-
         team_damage = (
             fight_df.groupby("team_id")["damage_delta"]
             .sum()
@@ -160,10 +145,7 @@ def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
         kills_a = team_kills.get(team_a, 0)
         kills_b = team_kills.get(team_b, 0)
 
-        # ----------------------------------------
         # WINNING TEAM
-        # ----------------------------------------
-
         if kills_a > kills_b:
             winning_team_id = team_a
 
@@ -179,10 +161,7 @@ def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
             else:
                 winning_team_id = team_b
 
-        # ----------------------------------------
         # FIRST DEATH
-        # ----------------------------------------
-
         death_rows = (
             fight_df[fight_df["deaths_delta"] > 0]
             .sort_values("time_seconds")
@@ -227,11 +206,6 @@ def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
 
 
 def process_and_save_ults(df: pd.DataFrame, map_id: int, hero_map: dict, round_starts: list) -> None:
-    """
-    Calculates completed ult cycles and saves them to the database.
-    Discarded: cycles interrupted by hero swaps or round starts.
-    """
-    # 1. Prepare data for analysis
     df = df.sort_values(['player_id', 'time_seconds']).copy()
     df['status_change'] = df.groupby('player_id')['ult_charged'].shift() != df['ult_charged']
     df['hero_name_clean'] = df['hero'].str.lower().str.replace(r'[.,:]', '', regex=True).str.replace(' ', '_')
@@ -278,7 +252,6 @@ def process_and_save_ults(df: pd.DataFrame, map_id: int, hero_map: dict, round_s
                 start_charging_time = t
                 start_holding_time = None
 
-    # 2. Bulk Insert to Database
     if charge_events:
         charge_query = """
             INSERT INTO fact_ult_charge_events 
@@ -435,7 +408,8 @@ def ingest_to_db(path) -> None:
                 leftover, map_played_id = file.name.split("map_played_id-")
                 map_played_id = int(map_played_id.rstrip(".csv"))
 
-                cur.execute("""SELECT mp.blue_team_id, mp.red_team_id, m.map_type_id FROM maps_played mp JOIN maps m ON mp.map_id = m.map_id WHERE mp.map_played_id = %s""", (map_played_id,))
+                cur.execute("""SELECT mp.blue_team_id, mp.red_team_id, m.map_type_id FROM maps_played mp 
+                            JOIN maps m ON mp.map_id = m.map_id WHERE mp.map_played_id = %s""", (map_played_id,))
                 blue_team_id, red_team_id, map_type_id = cur.fetchone()
                 map_type_id = int(map_type_id)
 

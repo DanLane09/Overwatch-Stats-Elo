@@ -80,7 +80,7 @@ VALUES
 ('Ana'), ('Anran'), ('Ashe'), ('Baptiste'), ('Bastion'), ('Brigitte'), ('Cassidy'), ('D.Va'), ('Domina'), ('Doomfist'), ('Echo'), ('Emre'), ('Freja'),
 ('Genji'), ('Hanzo'), ('Hazard'), ('Illari'), ('Jetpack Cat'), ('Junker Queen'), ('Junkrat'), ('Juno'), ('Kiriko'), ('Lifeweaver'),
 ('Lucio'), ('Mauga'), ('Mei'), ('Mercy'), ('Mizuki'), ('Moira'), ('Orisa'), ('Pharah'), ('Ramattra'), ('Reaper'), ('Reinhardt'),
-('Roadhog'), ('Sigma'), ('Sojourn'), ('Soldier: 76'), ('Sombra'), ('Symmetra'), ('Torbjorn'), ('Tracer'), ('Vendetta'),
+('Roadhog'), ('Shion'), ('Sierra'), ('Sigma'), ('Sojourn'), ('Soldier: 76'), ('Sombra'), ('Symmetra'), ('Torbjorn'), ('Tracer'), ('Vendetta'),
 ('Venture'), ('Widowmaker'), ('Winston'), ('Wrecking Ball'), ('Wuyang'), ('Zarya'), ('Zenyatta');
 
 --------- MAP TYPES
@@ -104,7 +104,7 @@ VALUES
 ('Antarctic Peninsula', 2), ('Busan', 2), ('Ilios', 2), ('Lijiang Tower', 2), ('Nepal', 2), ('Oasis', 2), ('Samoa', 2),
 ('Circuit Royal', 3), ('Dorado', 3), ('Havana', 3), ('Junkertown', 3), ('Rialto', 3), ('Route 66', 3), ('Shambali Monastery', 3), ('Watchpoint: Gibraltar', 3),
 ('Aatlis', 4), ('New Junk City', 4), ('Suravasa', 4),
-('Blizzard World', 5), ('Eichenwalde', 5), ('Hollywood', 5), ('King''s Row', 5), ('Midtown', 5), ('Numbani', 5), ('Paraiso', 5),
+('Blizzard World', 5), ('Eichenwalde', 5), ('Hollywood', 5), ('King''s Row', 5), ('Midtown', 5), ('Neon Junction', 5), ('Numbani', 5), ('Paraiso', 5),
 ('Colosseo', 6), ('Esperanca', 6), ('New Queen Street', 6), ('Runasapi', 6);
 
 --------- MAPS PLAYED (each map in a match)
@@ -231,8 +231,8 @@ CREATE TABLE fact_team_fight_events (
     map_played_id INT REFERENCES maps_played(map_played_id),
     start_time FLOAT,
     end_time FLOAT,
-    winning_team_id INT REFERENCES teams(team_id), -- TODO
-    first_death_player_id INT REFERENCES players(player_id), -- TODO
+    winning_team_id INT REFERENCES teams(team_id),
+    first_death_player_id INT REFERENCES players(player_id),
     --first_elim_player_id INT REFERENCES players(player_id),  TODO
 )
 

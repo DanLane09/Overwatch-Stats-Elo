@@ -1,8 +1,14 @@
 from collections import defaultdict, deque
 from copy import deepcopy
+from typing import Optional, Dict
+
 
 class Snapshot:
-    def __init__(self, game_time, hero, eliminations, assists, deaths, damage, healing, mitigated):
+    """
+    Represents the scoreboard state extracted for a player from a single timestep.
+    """
+    def __init__(self, game_time: int, hero: str, eliminations: int, assists: int, deaths: int, damage: int,
+                 healing: int, mitigated: int) -> None:
         self.game_time = game_time
         self.hero = hero
         self.eliminations = eliminations
@@ -14,13 +20,17 @@ class Snapshot:
 
 
 class HeroAccumulator:
-    def __init__(self):
-        self.current_hero = None
-        self.last_snapshot = None
-        self.player_id = None
+    """
+    Manages and tallies performance statistics per individual player across hero swaps.
+    When a player swaps hero the statistics for the previously played hero are calculated and attributed.
+    """
+    def __init__(self) -> None:
+        self.current_hero= None # Active character on the scoreboard
+        self.last_snapshot= None # Previous valid Snapshot to calculate deltas
+        self.player_id = None # Database player_id
         self.role = "none"
 
-        # final per-hero totals (this maps 1:1 to DB rows)
+        # Nested mapping tracks cumulative metrics grouped under character names as keys
         self.hero_totals = defaultdict(lambda: {
             "seconds": 0,
             "eliminations": 0,
@@ -45,17 +55,19 @@ class HeroAccumulator:
             "mitigated": 0,
         }
 
-    def ingest(self, snap: Snapshot):
-        """Process a new CV snapshot."""
-        # First frame
+    def ingest(self, snap: Snapshot) -> None:
+        """
+        Processes a newly parsed Snapshot entry and computes differences against the previous Snapshot.
+        """
+        # Baseline setup on start
         if self.last_snapshot is None:
             self.current_hero = snap.hero
             self.last_snapshot = snap
             return
 
-        # Compute deltas
+        # Compute deltas between Snapshots
         dt = int(snap.game_time) - int(self.last_snapshot.game_time)
-
+        # Negative numbers are prevented to safeguard against any OCR errors
         deltas = {
             "eliminations": max(0, int(snap.eliminations) - int(self.last_snapshot.eliminations)),
             "assists": max(0, int(snap.assists) - int(self.last_snapshot.assists)),
@@ -77,21 +89,25 @@ class HeroAccumulator:
 
         self.last_snapshot = snap
 
-    def finalize(self):
-        """Call at end of map. Returns DB-ready rows."""
+    def finalize(self)-> Dict[str, Dict[str, int]]:
+        """
+        Call at end of map to finish tracking.
+        Returns an isolated, deep copy of gathered aggregates ready for SQL insertion.
+        """
         return deepcopy(self.hero_totals)
 
-    def set_player_id(self, player_id):
+    # Standard setters and getters for attributes
+    def set_player_id(self, player_id: int) -> None:
         self.player_id = player_id
 
-    def get_player_id(self):
+    def get_player_id(self) -> Optional[int]:
         return self.player_id
 
-    def get_current_hero(self):
+    def get_current_hero(self) -> Optional[str]:
         return self.current_hero
 
-    def set_role(self, role):
+    def set_role(self, role: str) -> None:
         self.role = role
 
-    def get_role(self):
+    def get_role(self) -> str:
         return self.role
