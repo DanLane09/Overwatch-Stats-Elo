@@ -4,6 +4,96 @@ import cv2
 from typing import Dict, List, Any
 
 
+def load_escort_score_templates() -> List[Dict[str, Any]]:
+    templates = []
+    for fname in os.listdir("./Images/Score numbers/Escort"):
+        img = cv2.imread(os.path.join("./Images/Score numbers/Escort", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "number": fname.strip(".png"),  # Isolates name of the digit by removing file extension
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} escort score number templates")
+    return templates
+
+def load_control_score_templates() -> List[Dict[str, Any]]:
+    templates = []
+    for fname in os.listdir("./Images/Score numbers/Control"):
+        img = cv2.imread(os.path.join("./Images/Score numbers/Control", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "name": fname.strip(".png"),  # Isolates name of the digit by removing file extension
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} control score templates")
+    return templates
+
+def load_flashpoint_score_templates() -> List[Dict[str, Any]]:
+    templates = []
+    for fname in os.listdir("./Images/Score numbers/Flashpoint"):
+        img = cv2.imread(os.path.join("./Images/Score numbers/Flashpoint", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "name": fname.strip(".png"),  # Isolates name of the digit by removing file extension
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} flashpoint score templates")
+    return templates
+
+def load_percentage_templates() -> List[Dict[str, Any]]:
+    """
+    Loads pre-processed examples of each digit (0-9) used on the scoreboard.
+    """
+    templates = []
+    for fname in os.listdir("./Images/Percentage numbers"):
+        img = cv2.imread(os.path.join("./Images/Percentage numbers", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "number": fname.strip(".png"), # Isolates name of the digit by removing file extension
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} percentage number templates")
+    return templates
+
+def load_control_point_templates() -> List[Dict[str, Any]]:
+    """
+    Loads pre-processed examples of each control point letter.
+    """
+    templates = []
+    for fname in os.listdir("./Images/Point Letters/Control"):
+        img = cv2.imread(os.path.join("./Images/Point Letters/Control", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "name": fname.strip(".png"),
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} control point templates")
+    return templates
+
+def load_flashpoint_point_templates() -> List[Dict[str, Any]]:
+    """
+    Loads pre-processed examples of each flashpoint letter.
+    """
+    templates = []
+    for fname in os.listdir("./Images/Point Letters/Flashpoint"):
+        img = cv2.imread(os.path.join("./Images/Point Letters/Flashpoint", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "name": fname.strip(".png"),
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} flashpoint point templates")
+    return templates
+
+def load_push_decimals() -> List[Dict[str, Any]]:
+    """
+    Loads pre-processed examples of each digit (0-9) for the decimal used in the distance for push.
+    """
+    templates = []
+    for fname in os.listdir("./Images/Push Decimal Distance"):
+        img = cv2.imread(os.path.join("./Images/Push Decimal Distance", fname), cv2.IMREAD_GRAYSCALE)
+        templates.append({
+            "number": fname.strip(".png"),  # Isolates name of the digit by removing file extension
+            "img": img,
+        })
+    print(f"Loaded {len(templates)} push decimal number templates")
+    return templates
+
+
 def load_hero_portrait_templates() -> Dict[str, List[Dict[str, Any]]]:
     """
     Loads the 2D-hero icons shown on the scoreboard for both red and blue team.

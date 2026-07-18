@@ -15,6 +15,13 @@ def preprocess_image(crop: np.ndarray) -> np.ndarray:
     _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU) # Turns image black and white
     return binary
 
+def crop(image: np.ndarray, box: list[int]) -> np.ndarray:
+    """
+    Extracts a region from an image using [x_start, x_end, y_start, y_end] box limits.
+    """
+    x1, x2, y1, y2 = box
+    return image[y1:y2, x1:x2]
+
 def ssim_match(crop: np.ndarray, templates: List[Dict[str, Any]]) -> Tuple[Optional[str], float]:
     """
     Compares a cropped region against icon templates using the Structural Similarity Index (SSIM).
@@ -40,6 +47,61 @@ def get_role(image: np.ndarray, templates: List[Dict[str, Any]]) -> Tuple[Option
 def get_perk(img_crop: np.ndarray, templates: List[Dict[str, Any]]) -> Tuple[Optional[str], float]:
     return ssim_match(img_crop, templates)
 
+def get_escort_score(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]]) -> List[Any]:
+    scores = []
+    for value in crop_positions.values():
+        cropped_img = crop(img, value)
+        _, thresh = cv2.threshold(cropped_img, 180, 255, cv2.THRESH_BINARY)
+        digit = read_number(image=thresh, templates=templates)
+        if digit != "":
+            scores.append(int(digit))
+        else:
+            scores.append(-1)
+    return scores
+
+def get_control_score(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]], targets: List[List[int]]) -> List[Any]:
+    scores = []
+    for value, target in zip(crop_positions.values(), targets):
+        cropped_img = crop(img, value)
+        target_colour = np.array(target, dtype=np.uint8)
+        mask = np.all(cropped_img == target_colour, axis=2)
+        output = np.zeros_like(cropped_img)
+        output[mask] = [255, 255, 255]
+        output = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
+        digit, score = ssim_match(crop=output, templates=templates)
+        if score > 0.5:
+            scores.append(int(digit))
+        else:
+            scores.append(-1)
+    return scores
+
+def get_control_percentage(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]], targets: List[List[int]]) -> List[int]:
+    percentages = []
+    for value, target in zip(crop_positions.values(), targets):
+        cropped_img = crop(img, value)
+        target_colour = np.array(target, dtype=np.uint8)
+        mask = np.all(cropped_img == target_colour, axis=2)
+        output = np.zeros_like(cropped_img)
+        output[mask] = [255, 255, 255]
+        output = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
+        number = read_number(output, templates, 10)
+        percentages.append(number)
+    return percentages
+
+def get_control_point(img: np.ndarray, crop_positions: List[int], templates: List[Dict[str, Any]]) -> str|None:
+    cropped_img = crop(img, crop_positions)
+    gray_img = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
+    img = preprocess_image(gray_img)
+    point, score = ssim_match(img, templates)
+    if score > 0.5:
+        return point
+    else:
+        return None
+
+
+def read_stat(img_crop: np.ndarray, templates: List[Dict[str, Any]]) -> str:
+    image = preprocess_image(img_crop)
+    return read_number(image=image, templates=templates)
 
 @dataclass
 class DigitMatch:
@@ -53,48 +115,89 @@ class DigitMatch:
     width: int
     height: int
 
-def read_stat(img_crop: np.ndarray, templates: List[Dict[str, Any]], threshold: float = 0.6) -> str:
+def read_number(
+    image: np.ndarray,
+    templates: List[Dict[str, Any]],
+    threshold: float = 0.5,
+    iou_threshold: float = 0.3,
+) -> str:
     """
-    Scans a cropped image for numeric characters.
-    Uses template matching combined with Non-Maximum Suppression (NMS) to parse and read the final string value.
+    Detects digits in an image using template matching and Non-Maximum Suppression.
     """
-    matches = []
-    image = preprocess_image(img_crop)
-    # Run structural comparisons against templates for every digit 0-9
-    for template in templates:
-        number = template["number"]
-        binary = template["img"]
-        template_height, template_width = binary.shape[:2]
-        image_height, image_width = image.shape[:2]
+    matches: list[DigitMatch] = []
 
-        # Skip comparisons if the target template size exceeds current crop dimensions (SHOULDN'T BE NEEDED)
-        if template_height > image_height or template_width > image_width:
+    image_height, image_width = image.shape[:2]
+
+    # Find every template match
+    for template in templates:
+        digit = template["number"]
+        template_img = template["img"]
+        height, width = template_img.shape[:2]
+
+        if height > image_height or width > image_width:
             continue
 
-        # Execute normalized cross-correlation matching
-        result = cv2.matchTemplate(image, binary, cv2.TM_CCOEFF_NORMED)
-        locations = np.where(result > threshold)
+        result = cv2.matchTemplate(image, template_img, cv2.TM_CCOEFF_NORMED)
 
-        # Record all match hits that pass our threshold
-        for y, x in zip(*locations):
-            confidence = float(result[y, x])
-            matches.append(DigitMatch(digit=number, x=int(x), y=int(y), confidence=confidence, width=template_width,
-                                      height=template_height, ))
+        ys, xs = np.where(result >= threshold)
 
-    # Sort detections by confidence score so we evaluate the most accurate hits first
-    min_distance = 20 # Minimum pixel gap allowed between consecutive digit locations
-    sorted_matches = sorted(matches, key=lambda m: -m.confidence)
+        for x, y in zip(xs, ys):
+            matches.append(
+                DigitMatch(
+                    digit=digit,
+                    x=int(x),
+                    y=int(y),
+                    confidence=float(result[y, x]),
+                    width=width,
+                    height=height,
+                )
+            )
 
-    kept = []
-    for match in sorted_matches:
-        overlaps = False
-        for kept_match in kept:
-            if abs(match.x - kept_match.x) < min_distance:
-                overlaps = True
-                break
+    matches = non_maximum_suppression(matches, iou_threshold)
 
-        if not overlaps:
+    # Used for debugging: outputs every single match, where and confidence score
+    """for match in sorted(matches, key=lambda m: m.x):
+        print(
+            f"{match.digit}  "
+            f"x={match.x:3d}  "
+            f"conf={match.confidence:.3f}"
+        )"""
+
+    return "".join(
+        match.digit
+        for match in sorted(matches, key=lambda m: m.x)
+    )
+
+def non_maximum_suppression(
+    matches: List[DigitMatch],
+    iou_threshold: float,
+) -> List[DigitMatch]:
+    """
+    Removes duplicate template matches using IoU-based Non-Maximum Suppression.
+    """
+    kept: list[DigitMatch] = []
+
+    for match in sorted(matches, key=lambda m: m.confidence, reverse=True):
+        if all(iou(match, other) < iou_threshold for other in kept):
             kept.append(match)
-    # Sort remaining unique digits from left-to-right to read the final number correctly
-    sorted_matches = sorted(kept, key=lambda m: m.x)
-    return "".join(m.digit for m in sorted_matches)
+
+    return kept
+
+def iou(a: DigitMatch, b: DigitMatch) -> float:
+    """
+    Computes the Intersection over Union (IoU) of two digit detections.
+    """
+    left = max(a.x, b.x)
+    top = max(a.y, b.y)
+    right = min(a.x + a.width, b.x + b.width)
+    bottom = min(a.y + a.height, b.y + b.height)
+
+    if right <= left or bottom <= top:
+        return 0.0
+
+    intersection = (right - left) * (bottom - top)
+
+    area_a = a.width * a.height
+    area_b = b.width * b.height
+
+    return intersection / (area_a + area_b - intersection)

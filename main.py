@@ -161,7 +161,7 @@ def create_match():
     match_type = str(input("Enter the match type: "))
     first_to = int(input("First to (e.g. 2, 3, 4): "))
     # version = input("Enter game version: ")
-    version = "2.22.1.1.149872"
+    version = "2.23.0.0.150818"
 
     if "." in offset:
         hours, minutes = offset.split(".")
@@ -398,7 +398,7 @@ def add_map():
         print(f"{i+1}) {m[1]}")
     map_id = maps[int(input("Map: ")) - 1][0]
 
-    # replay_code = input("Replay code: ")
+    replay_code = input("Replay code: ")
 
     print(f"1) {all_soon_games[match_idx][2]}")
     print(f"2) {all_soon_games[match_idx][3]}")
@@ -444,15 +444,15 @@ def add_map():
             match_id, map_number, map_id,
             blue_team_id, red_team_id,
             blue_team_score, red_team_score,
-            winning_team_id, losing_team_id, first_ban_team_id, first_ban_hero_id, second_ban_hero_id
+            winning_team_id, losing_team_id, first_ban_team_id, first_ban_hero_id, second_ban_hero_id, replay_code
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)
         RETURNING map_played_id;
     """, (
         match_id, map_number, map_id,
         left_team_id, right_team_id,
         left_score, right_score,
-        winner_id, loser_id, first_ban_team_id, first_hero_ban_id, second_hero_ban_id
+        winner_id, loser_id, first_ban_team_id, first_hero_ban_id, second_hero_ban_id, replay_code
     ))
     match_map_id = cur.fetchone()[0]
 
