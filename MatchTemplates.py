@@ -84,7 +84,7 @@ def get_control_percentage(img: np.ndarray, crop_positions: Dict[str, List[int]]
         output = np.zeros_like(cropped_img)
         output[mask] = [255, 255, 255]
         output = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
-        number = read_number(output, templates, 10)
+        number = read_number(output, templates)
         percentages.append(number)
     return percentages
 

@@ -41,9 +41,15 @@ escort = {
     },
     "distance": {
         "blue_distance": [785, 858, 60, 74],
-        "red_distance": [1060, 1125, 60, 74],
-        "overtime_blue_distance": [778, 870, 64, 78],
-        "overtime_red_distance": [1050, 1142, 64, 78],
+        "red_distance": [1060, 1125, 60, 74]
+    },
+    "overtime_points": { # NOT CURRENTLY USED
+        "blue_points": [673, 781, 34, 84], # CHECK y
+        "red_points": [1140, 1247, 34, 84]
+    },
+    "overtime_distance": {
+        "blue_distance": [778, 870, 64, 78],
+        "red_distance": [1050, 1142, 64, 78],
     }
 }
 

@@ -161,7 +161,7 @@ def create_match():
     match_type = str(input("Enter the match type: "))
     first_to = int(input("First to (e.g. 2, 3, 4): "))
     # version = input("Enter game version: ")
-    version = "2.23.0.0.150818"
+    version = "2.24.0.0.152690"
 
     if "." in offset:
         hours, minutes = offset.split(".")

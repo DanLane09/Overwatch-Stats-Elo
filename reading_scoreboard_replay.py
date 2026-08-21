@@ -53,19 +53,23 @@ def get_team(numb: int) -> str:
     return "blue" if numb < 5 else "red"
 
 
-def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_mode: str, blue_points_captured: int,
-                    red_points_captured: int, blue_distance: float, red_distance: float, in_control: str|None, current_point: str|None) -> Tuple[int, int, float, float, str|None, str|None]:
+def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: int, game_mode: str, blue_points_captured: int,
+                    red_points_captured: int, blue_distance: float, red_distance: float, in_control: str|None, current_point: str|None, event_log: list, previous_capture_time: int) -> Tuple[int, int, float, float, str|None, str|None, list, int]:
     if (game_mode == "Escort") or (game_mode == "Hybrid"):
-        if (get_pixel(colour_frame, CropPositions.escort["overtime_layout_check"]) != [255, 165, 0]).all():
-            blue_team_score, red_team_score = MatchTemplates.get_escort_score(frame, CropPositions.escort["points"],
-                                                                          escort_score_templates)
-            blue_capture_distance = MatchTemplates.read_stat(crop(frame, CropPositions.escort["distance"]["blue_distance"]), stats_templates)
-            red_capture_distance = MatchTemplates.read_stat(crop(frame, CropPositions.escort["distance"]["red_distance"]), stats_templates)
-        else:
+        point_crop = CropPositions.escort["points"]
+        distance_crop = CropPositions.escort["distance"]
+        if (get_pixel(colour_frame, CropPositions.escort["overtime_layout_check"]) == [255, 165, 0]).all():
+            distance_crop = CropPositions.escort["overtime_distance"]
             blue_team_score = blue_points_captured
             red_team_score = red_points_captured
-            blue_capture_distance = MatchTemplates.read_stat(crop(frame, CropPositions.escort["distance"]["overtime_blue_distance"]), stats_templates)
-            red_capture_distance = MatchTemplates.read_stat(crop(frame, CropPositions.escort["distance"]["overtime_red_distance"]), stats_templates)
+            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"]), stats_templates)
+            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"]), stats_templates)
+        else:
+            blue_team_score, red_team_score = MatchTemplates.get_escort_score(frame, point_crop, escort_score_templates)
+            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"]), stats_templates)
+            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"]), stats_templates)
+
+        # Separate whole metres from decimal
         if blue_capture_distance != "":
             blue_capture_distance = float(blue_capture_distance[:-2] + "." + blue_capture_distance[-2:])
         else:
@@ -74,16 +78,20 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
             red_capture_distance = float(red_capture_distance[:-2] + "." + red_capture_distance[-2:])
         else:
             red_capture_distance = red_distance
-        if (blue_capture_distance == 0.1 and red_capture_distance == 0.1) or (blue_capture_distance == 0.0 and red_capture_distance == 0.1):
-            blue_capture_distance, red_capture_distance = blue_distance, red_distance
-        print(blue_capture_distance, red_capture_distance)
+
+        """if (blue_capture_distance == 0.1 and red_capture_distance == 0.1) or (blue_capture_distance == 0.0 and red_capture_distance == 0.1):
+            blue_capture_distance, red_capture_distance = blue_distance, red_distance"""
         if (blue_points_captured < blue_team_score) and (blue_team_score - blue_points_captured == 1):
-            print(f"Blue team captured point {blue_team_score} at {time}")
+            log = f"[{current_time}],{first_team_name} captured point {blue_team_score}"
+            event_log.append(log)
+            #print(f"Blue team captured point {blue_team_score} at {current_time}")
             blue_points_captured = blue_team_score
         if (red_points_captured < red_team_score) and (red_team_score - red_points_captured == 1):
-            print(f"Red team captured point {red_team_score} at {time}")
+            log = f"[{current_time}],{second_team_name} captured point {red_team_score}"
+            event_log.append(log)
+            #print(f"Red team captured point {red_team_score} at {current_time}")
             red_points_captured = red_team_score
-        return int(blue_points_captured), int(red_points_captured), blue_capture_distance, red_capture_distance, in_control, current_point
+        return int(blue_points_captured), int(red_points_captured), blue_capture_distance, red_capture_distance, in_control, current_point, event_log, previous_capture_time
 
     elif game_mode == "Control":
         # Setting default values
@@ -96,7 +104,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
            (get_pixel(colour_frame, CropPositions.control["pre_point_layout_check"][1]) == [239, 46, 81]).all()):
             in_control = None
             current_point = None
-            return blue_points_captured, red_points_captured, 0, 0, in_control, current_point
+            return blue_points_captured, red_points_captured, 0, 0, in_control, current_point, event_log, previous_capture_time
 
         # Indicates that overtime is active
         if (get_pixel(colour_frame, CropPositions.control["overtime_layout_check"]) == [255, 165, 0]).all():
@@ -111,12 +119,14 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                     crop_positions=percentage_layout,
                                                                                     templates=percentage_templates,
                                                                                     targets=[[255, 255, 255], [239, 46, 81]])
-                if blue_new_distance == "" or red_new_distance == "":
-                    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
-                print(f"Blue team has captured the objective at {time}")
-                print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
+                if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 1.2 - (int(red_new_distance) - int(red_distance))) > 2):
+                    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
+                log = f"[{current_time}],{first_team_name} captured point {current_point},{first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
+                event_log.append(log)
+                #print(f"Blue team has captured the objective at {current_time}")
+                #print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
                 in_control = "blue"
-                return blue_points_captured, red_points_captured, blue_distance, red_new_distance, in_control, current_point
+                return blue_points_captured, red_points_captured, blue_distance, red_new_distance, in_control, current_point, event_log, current_time
 
         # Red team is in control
         elif ((get_pixel(colour_frame, team_in_control_check[0]) == [0, 190, 255]).all() and
@@ -126,12 +136,14 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                     crop_positions=percentage_layout,
                                                                                     templates=percentage_templates,
                                                                                     targets=[[0, 190, 255], [255, 255, 255]])
-                if blue_new_distance == "" or red_new_distance == "":
-                    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
-                print(f"Red team has captured the objective at {time}")
-                print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
+                if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 1.2 - (int(blue_new_distance) - int(blue_distance))) > 2):
+                    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
+                log = f"[{current_time}],{second_team_name} captured point {current_point},{first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
+                event_log.append(log)
+                #print(f"Red team has captured the objective at {current_time}")
+                #print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
                 in_control = "red"
-                return blue_points_captured, red_points_captured, blue_new_distance, red_distance, in_control, current_point
+                return blue_points_captured, red_points_captured, blue_new_distance, red_distance, in_control, current_point, event_log, current_time
 
         # Neither team is in control
         # Triggered right after the point unlocks or at the end of the round before the UI changes to next round
@@ -145,26 +157,32 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                 templates=percentage_templates,
                                                                                 targets=[[0, 190, 255], [239, 46, 81]])
             if blue_new_distance == "" or red_new_distance == "":
-                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
+                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
             point = current_point
             if current_point is None:
                 point = MatchTemplates.get_control_point(img=colour_frame, crop_positions=CropPositions.control["point_selection"], templates=control_point_templates)
                 if point is not None:
-                    print(f"Control point {point} unlocked")
+                    log = f"[{current_time}],Control point {point} unlocked"
+                    event_log.append(log)
+                    #print(f"Control point {point} unlocked")
 
             if (blue_team_score - blue_points_captured == 1) or (red_team_score - red_points_captured == 1):
                 print(blue_team_score, red_team_score)
 
             if in_control == "blue":
                 in_control = None
-                print(f"Blue team has won point {point}")
-                return blue_team_score, red_team_score, 100, red_new_distance, in_control, point
+                log = f"[{current_time}],{first_team_name} won point {point},{first_team_name} 100% - {red_new_distance}% {second_team_name}"
+                event_log.append(log)
+                #print(f"Blue team has won point {point}")
+                return blue_team_score, red_team_score, 100, red_new_distance, in_control, point, event_log, current_time
             elif in_control == "red":
                 in_control = None
-                print(f"Red team has won point {point}")
-                return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point
+                log = f"[{current_time}],{second_team_name} won point {point},{first_team_name} {blue_new_distance}% - 100% {second_team_name}"
+                event_log.append(log)
+                #print(f"Red team has won point {point}")
+                return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point, event_log, current_time
             else:
-                return blue_team_score, red_team_score, blue_new_distance, red_new_distance, in_control, point
+                return blue_team_score, red_team_score, blue_new_distance, red_new_distance, in_control, point, event_log, current_time
 
     elif game_mode == "Flashpoint":
         # Setting default values
@@ -186,15 +204,19 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
 
                 if in_control == "blue":
                     in_control = None
-                    print(f"Blue team has won point {current_point}")
-                    return blue_team_score, red_team_score, 100, red_distance, in_control, current_point
+                    log = f"[{current_time}], {first_team_name} won flashpoint {current_point}"
+                    event_log.append(log)
+                    #print(f"Blue team has won point {current_point}")
+                    return blue_team_score, red_team_score, 100, red_distance, in_control, current_point, event_log, current_time
                 elif in_control == "red":
                     in_control = None
-                    print(f"Red team has won point {current_point}")
-                    return blue_team_score, red_team_score, blue_distance, 100, in_control, current_point
+                    log = f"[{current_time}], {second_team_name} won flashpoint {current_point}"
+                    event_log.append(log)
+                    #print(f"Red team has won point {current_point}")
+                    return blue_team_score, red_team_score, blue_distance, 100, in_control, current_point, event_log, current_time
             in_control = None
             current_point = None
-            return blue_points_captured, red_points_captured, 0, 0, in_control, current_point
+            return blue_points_captured, red_points_captured, 0, 0, in_control, current_point, event_log, current_time
 
         # Indicates that overtime is active
         if (get_pixel(colour_frame, CropPositions.flashpoint["overtime_layout_check"]) == [255, 165, 0]).all():
@@ -210,12 +232,14 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                         templates=percentage_templates,
                                                                                         targets=[[255, 255, 255],
                                                                                                  [239, 46, 81]])
-            if blue_new_distance == "" or red_new_distance == "":
-                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
-            print(f"Blue team has captured the objective at {time}")
-            print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
+            if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 0.7 - (int(red_new_distance) - int(red_distance))) > 5):
+                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
+            log = f"[{current_time}],{first_team_name} captured point {current_point},{first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
+            event_log.append(log)
+            #print(f"Blue team has captured the objective at {current_time}")
+            #print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
             in_control = "blue"
-            return blue_points_captured, red_points_captured, blue_distance, red_new_distance, in_control, current_point
+            return blue_points_captured, red_points_captured, blue_distance, red_new_distance, in_control, current_point, event_log, current_time
 
         # Red team is in control
         elif ((get_pixel(colour_frame, team_in_control_check[0]) == [0, 190, 255]).all() and
@@ -226,12 +250,14 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                         templates=percentage_templates,
                                                                                         targets=[[0, 190, 255],
                                                                                                  [255, 255, 255]])
-            if blue_new_distance == "" or red_new_distance == "":
-                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
-            print(f"Red team has captured the objective at {time}")
-            print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
+            if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 0.7 - (int(red_new_distance) - int(red_distance))) > 5):
+                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
+            log = f"[{current_time}],{second_team_name} captured point {current_point},{first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
+            event_log.append(log)
+            #print(f"Red team has captured the objective at {current_time}")
+            #print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
             in_control = "red"
-            return blue_points_captured, red_points_captured, blue_new_distance, red_distance, in_control, current_point
+            return blue_points_captured, red_points_captured, blue_new_distance, red_distance, in_control, current_point, event_log, current_time
 
         # Neither team is in control
         # Triggered right after the point unlocks or at the end of the round before the UI changes to next round
@@ -246,37 +272,43 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
                                                                                         targets=[[0, 190, 255],
                                                                                                  [239, 46, 81]])
             if blue_new_distance == "" or red_new_distance == "":
-                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
+                return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
             point = current_point
             if current_point is None:
                 point = MatchTemplates.get_control_point(img=colour_frame,
                                                          crop_positions=CropPositions.flashpoint["point_selection"],
                                                          templates=flashpoint_point_templates)
                 if point is not None:
-                    print(f"Control point {point} unlocked")
+                    log = f"Flashpoint {point} unlocked"
+                    event_log.append(log)
+                    #print(f"Control point {point} unlocked")
 
             if (blue_team_score - blue_points_captured == 1) or (red_team_score - red_points_captured == 1):
                 print(blue_team_score, red_team_score)
 
             if in_control == "blue":
                 in_control = None
-                print(f"Blue team has won point {point}")
-                return blue_team_score, red_team_score, 100, red_new_distance, in_control, point
+                log = f"[{current_time}], {first_team_name} won flashpoint {point}"
+                event_log.append(log)
+                #print(f"Blue team has won point {point}")
+                return blue_team_score, red_team_score, 100, red_new_distance, in_control, point, event_log, current_time
             elif in_control == "red":
                 in_control = None
-                print(f"Red team has won point {point}")
-                return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point
+                log = f"[{current_time}], {second_team_name} won flashpoint {point}"
+                event_log.append(log)
+                #print(f"Red team has won point {point}")
+                return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point, event_log, current_time
             else:
-                return blue_team_score, red_team_score, blue_new_distance, red_new_distance, in_control, point
+                return blue_team_score, red_team_score, blue_new_distance, red_new_distance, in_control, point, event_log, current_time
 
     elif game_mode == "Push":
         distances = []
         crop_positions = CropPositions.push["in_game"]
         if (get_pixel(colour_frame, CropPositions.push["overtime_layout_check"]) == [255, 166, 0]).all():
             crop_positions = CropPositions.push["overtime"]
-        if time <= 30:
+        if current_time <= 30:
             print(0.0, 0.0)
-            return 0, 0, 0.0, 0.0, in_control, current_point
+            return 0, 0, 0.0, 0.0, in_control, current_point, event_log, current_time
         for i, value in enumerate(crop_positions.values()):
             cropped_img = crop(frame, value)
             if i < 2:
@@ -293,18 +325,38 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, time: int, game_
         red_return = float(f"{distances[1]}.{distances[3]}")
         if (blue_return > blue_distance + 4) or (red_return > red_distance + 4):
             print(blue_distance, red_distance)
-            return 0, 0, blue_distance, red_distance, in_control, current_point
+            return 0, 0, blue_distance, red_distance, in_control, current_point, event_log, current_time
 
         print(blue_return, red_return)
-        return 0, 0, blue_return, red_return, in_control, current_point
+        return 0, 0, blue_return, red_return, in_control, current_point, event_log, current_time
 
+    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
 
-    return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point
+def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_points_captured: int,
+              blue_distance: float, red_distance: float, in_control: str|None, current_point: str|None, event_log: list) -> Tuple[int, int, float, float, list]:
+    if (game_mode == "Control") or (game_mode == "Flashpoint"):
+        if in_control == "blue":
+            blue_points_captured += 1
+            blue_distance = 100
+            log = f"[{current_time}],{first_team_name} won point {current_point},{first_team_name} 100% - {red_distance}% {second_team_name}"
+            event_log.append(log)
+        else:
+            red_points_captured += 1
+            red_distance = 100
+            log = f"[{current_time}],{second_team_name} won point {current_point},{first_team_name} {blue_distance}% - 100% {second_team_name}"
+            event_log.append(log)
+        log = f"[{current_time + 1}], Game ended"
+        return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+
+    if (game_mode == "Escort") or (game_mode == "Hybrid"):
+        return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+
+    return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
 
 
 def get_player_data(image: np.ndarray, current_time: int, player_acc: HeroAccumulator.HeroAccumulator,
                     current_layout: CropPositions.PerkLayout, hero_templates: list[dict[str, np.ndarray]],
-                    stat_templates, iteration, final):
+                    stat_templates, iteration, final, event_log):
     """
     Extracts and updates statistics for a single player from the current video frame.
     Runs for every player on every captured frame.
@@ -360,10 +412,14 @@ def get_player_data(image: np.ndarray, current_time: int, player_acc: HeroAccumu
     )
 
     # Only update the HeroAccumulator if the player has swapped heroes
-    if hero_name != player_acc.get_current_hero() or final == True:
+    if hero_name != player_acc.get_current_hero():
+        log = f"[{current_time}], {player_acc.get_player_name()} swapped from {player_acc.get_current_hero()} to {hero_name}"
+        event_log.append(log)
+        player_acc.ingest(snap=snap)
+    if final:
         player_acc.ingest(snap=snap)
 
-    return [hero_name, player_acc.get_player_id(), ult_charged, minor_perk, major_perk, *numbers.values()]
+    return [hero_name, player_acc.get_player_id(), ult_charged, minor_perk, major_perk, *numbers.values()], event_log
 
 def insert_hero_stats(conn, map_id, player_id, team_id, opp_id, hero_stats):
     """
@@ -416,7 +472,7 @@ def get_replays():
             WHERE phms.map_played_id = mp.map_played_id
         )
         AND mp.replay_code != '[null]'
-        AND m.game_version = '2.23.0.0.150818'
+        AND m.game_version = '2.24.0.0.152690'
         ORDER BY m.date_played, mp.match_id, mp.map_number;
     """)
     all_replays = cur.fetchall()
@@ -447,7 +503,7 @@ replays = get_replays()
 print(len(replays))
 print(replays)
 time.sleep(5)
-loaded_first_replay = True # Flag if we need to parse a replay already loaded into the client (importing won't work)
+loaded_first_replay = True           # Flag if we need to parse a replay already loaded into the client (importing won't work)
 # Get replay codes specifically
 for i in range (len(replays)):
     replay = replays[i]
@@ -493,10 +549,24 @@ for i in range (len(replays)):
     red_team_points_captured = 0
     blue_team_capture_distance = 0
     red_team_capture_distance = 0
+    previous_capture_time = 0
     in_control = None
     current_point = None
 
+    event_log = []
+    cur.execute("""
+            SELECT name FROM teams WHERE team_id = %s;
+        """, (replay[3],))
+    first_team_name = cur.fetchone()[0]
+
+    cur.execute("""
+                SELECT name FROM teams WHERE team_id = %s;
+            """, (replay[4],))
+    second_team_name = cur.fetchone()[0]
+    team_names = [first_team_name, second_team_name]
+
     while game_running:
+        print(event_log)
         game_frame = camera.get_latest_frame()
         # Open scoreboard and wait for it to render fully before taking screenshot
         pyautogui.keyDown('tab')
@@ -512,16 +582,25 @@ for i in range (len(replays)):
                 name_img = crop(image=gray_scoreboard, box=CropPositions.layouts["none"].name_crop[i])
                 player_id, player_name = ReadText.read_name(img_crop=name_img, team_id=team_id, reader=reader, cur=cur)
                 player_accs[i].set_player_id(player_id)
+                player_accs[i].set_player_name(player_name)
 
         # END-GAME RECOGNITION: Detect completely dark pixels where we would expect to see light, indicating end of game
         if (scoreboard_frame[170, 810] < 30).all():
+            (blue_team_points_captured,
+             red_team_points_captured,
+             blue_team_capture_distance,
+             red_team_capture_distance,
+             event_log) = end_score(current_time=previous_time, game_mode=replay[7], blue_points_captured=blue_team_points_captured,
+                      red_points_captured=red_team_points_captured, blue_distance=blue_team_capture_distance,
+                      red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point, event_log=event_log)
+
             game_running = False
             for i, acc in enumerate(player_accs):
                 team = get_team(numb=i)
                 role = acc.get_role()
-                stats = get_player_data(image = previous_scoreboard_frame, current_time=previous_time, player_acc=acc,
+                stats, event_log = get_player_data(image = previous_scoreboard_frame, current_time=previous_time, player_acc=acc,
                                         current_layout=previous_layout,hero_templates=hero_templates[team][role],
-                                        stat_templates=stats_templates, iteration=i, final=True)
+                                        stat_templates=stats_templates, iteration=i, final=True, event_log=event_log)
                 main.add_player_map_stats(map_id=replay[1], match_id=replay[0], player_id=acc.get_player_id(),
                                           kills=int(stats[5]),deaths=int(stats[7]), assists=int(stats[6]),
                                           damage=int(stats[8]), healing=int(stats[9]), mitigated=int(stats[10]))
@@ -549,11 +628,11 @@ for i in range (len(replays)):
              red_team_points_captured,
              blue_team_capture_distance,
              red_team_capture_distance,
-             in_control, current_point) = get_team_scores(frame=gray_game_frame, colour_frame=game_frame, time=previous_time,
+             in_control, current_point, event_log, previous_capture_time) = get_team_scores(frame=gray_game_frame, colour_frame=game_frame, current_time=previous_time,
                                            game_mode=replay[7], blue_points_captured=blue_team_points_captured,
                                            red_points_captured=red_team_points_captured,
                                            blue_distance=blue_team_capture_distance,
-                                           red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point)
+                                           red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point, event_log=event_log, previous_capture_time=previous_capture_time)
             continue
         else:
             match_time = (int(mins) * 60) + int(secs) # Convert time to seconds
@@ -563,11 +642,11 @@ for i in range (len(replays)):
          red_team_points_captured,
          blue_team_capture_distance,
          red_team_capture_distance,
-         in_control, current_point) = get_team_scores(frame=gray_game_frame, colour_frame=game_frame, time=match_time,
+         in_control, current_point, event_log, previous_capture_time) = get_team_scores(frame=gray_game_frame, colour_frame=game_frame, current_time=match_time,
                                        game_mode=replay[7], blue_points_captured=blue_team_points_captured,
                                        red_points_captured=red_team_points_captured,
                                        blue_distance=blue_team_capture_distance,
-                                        red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point)
+                                        red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point, event_log=event_log, previous_capture_time=previous_capture_time)
 
         # LAYOUT DETECTION: Check perk positions to select the correct crops to use
         if check_white_pixels(scoreboard_frame, CropPositions.major_perk_positions):
@@ -590,9 +669,9 @@ for i in range (len(replays)):
             role = acc.get_role()
             # Error handling incase player doesn't select hero by the time tracking starts
             if role != "none":
-                stats = get_player_data(image=gray_scoreboard, current_time=match_time, player_acc=acc,
+                stats, event_log = get_player_data(image=gray_scoreboard, current_time=match_time, player_acc=acc,
                                         current_layout=layout, hero_templates=hero_templates[team][role],
-                                        stat_templates=stats_templates, iteration=i, final=False)
+                                        stat_templates=stats_templates, iteration=i, final=False, event_log=event_log)
             else:
                 stats = [None, acc.get_player_id(), False, None, None, 0, 0, 0, 0, 0, 0]
             # Collating data to insert into CSV
@@ -614,21 +693,15 @@ for i in range (len(replays)):
     camera.stop()
 
     # --- SAVE MAP DATA ---
-    cur.execute("""
-        SELECT name FROM teams WHERE team_id = %s;
-    """, (replay[3],))
-    first_name = cur.fetchone()[0]
-
-    cur.execute("""
-            SELECT name FROM teams WHERE team_id = %s;
-        """, (replay[4],))
-    second_name = cur.fetchone()[0]
-
-    with open(f'./Game CSVs/{first_name} vs {second_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.csv', 'w', newline='') as f:
+    with open(f'./Game CSVs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(
             ['time', 'hero', 'player_id', 'ult_charged', 'minor_perk', 'major_perk', 'eliminations', 'assists', 'deaths', 'damage', 'healing', 'mitigated'])
         writer.writerows(all_data)
+
+    with open(f'./Game Logs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.txt', 'w') as f:
+        for line in event_log:
+            f.write(f"{line}\n")
 
     conn.commit()
     pyautogui.press("esc") # Exit current replay and go back to career profile

@@ -28,6 +28,7 @@ class HeroAccumulator:
         self.current_hero= None # Active character on the scoreboard
         self.last_snapshot= None # Previous valid Snapshot to calculate deltas
         self.player_id = None # Database player_id
+        self.player_name = None
         self.role = "none"
 
         # Nested mapping tracks cumulative metrics grouped under character names as keys
@@ -111,3 +112,9 @@ class HeroAccumulator:
 
     def get_role(self) -> str:
         return self.role
+
+    def set_player_name(self, player_name: str) -> None:
+        self.player_name = player_name
+
+    def get_player_name(self) -> Optional[str]:
+        return self.player_name
