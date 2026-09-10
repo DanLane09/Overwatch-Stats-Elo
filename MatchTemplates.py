@@ -52,7 +52,7 @@ def get_escort_score(img: np.ndarray, crop_positions: Dict[str, List[int]], temp
     for value in crop_positions.values():
         cropped_img = crop(img, value)
         _, thresh = cv2.threshold(cropped_img, 180, 255, cv2.THRESH_BINARY)
-        digit = read_number(image=thresh, templates=templates)
+        digit = read_number(image=thresh, templates=templates, threshold=0.7)
         if digit != "":
             scores.append(int(digit))
         else:

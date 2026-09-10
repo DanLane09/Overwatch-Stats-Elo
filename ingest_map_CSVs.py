@@ -68,7 +68,6 @@ def detect_ult_usage(df) -> pd.DataFrame:
     )
     return df
 
-
 def detect_rounds(df: pd.DataFrame, map_played_id: int) -> list:
     counts = df.groupby('time').size()
     # Filter times with more than 50 snapshots
@@ -82,7 +81,6 @@ def detect_rounds(df: pd.DataFrame, map_played_id: int) -> list:
         """, (map_played_id, i + 1, start_time))
 
     return sorted(round_starts)
-
 
 def detect_team_fights(df: pd.DataFrame, map_played_id: int) -> None:
     # Filter for 'Action Events'

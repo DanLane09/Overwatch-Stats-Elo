@@ -5,6 +5,7 @@ import cv2
 import psycopg2
 import bettercam
 import easyocr
+from itertools import groupby
 import pyautogui
 pyautogui.FAILSAFE = True
 import time
@@ -317,13 +318,17 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
             else:
                 _, binary = cv2.threshold(cropped_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                 number = MatchTemplates.read_number(image=binary, templates=push_decimal_templetes, threshold=0.8, iou_threshold=0.4)
+
             if number != "":
                 distances.append(int(number))
             else:
                 distances.append(0)
         blue_return = float(f"{distances[0]}.{distances[2]}")
         red_return = float(f"{distances[1]}.{distances[3]}")
-        if (blue_return > blue_distance + 4) or (red_return > red_distance + 4):
+        if (blue_return > blue_distance + 6) or (red_return > red_distance + 6):
+            print(blue_distance, red_distance)
+            return 0, 0, blue_distance, red_distance, in_control, current_point, event_log, current_time
+        if (blue_return < blue_distance) or (red_return < red_distance):
             print(blue_distance, red_distance)
             return 0, 0, blue_distance, red_distance, in_control, current_point, event_log, current_time
 
@@ -332,9 +337,17 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
 
     return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
 
+
 def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_points_captured: int,
               blue_distance: float, red_distance: float, in_control: str|None, current_point: str|None, event_log: list) -> Tuple[int, int, float, float, list]:
     if (game_mode == "Control") or (game_mode == "Flashpoint"):
+        cur.execute("""
+                    SELECT blue_team_score, red_team_score FROM maps_played WHERE map_played_id = %s;
+                """, (replay[1],))
+        blue_expected_score, red_expected_score = cur.fetchone()
+        # If the end of the game has been captured by the default score logic we can skip this end score logic
+        if (blue_expected_score == blue_points_captured) and (red_expected_score == red_points_captured):
+            return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
         if in_control == "blue":
             blue_points_captured += 1
             blue_distance = 100
@@ -346,9 +359,40 @@ def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_
             log = f"[{current_time}],{second_team_name} won point {current_point},{first_team_name} {blue_distance}% - 100% {second_team_name}"
             event_log.append(log)
         log = f"[{current_time + 1}], Game ended"
+        event_log.append(log)
         return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
 
-    if (game_mode == "Escort") or (game_mode == "Hybrid"):
+    elif (game_mode == "Escort") or (game_mode == "Hybrid"):
+        cur.execute("""
+            SELECT blue_team_score, red_team_score FROM maps_played WHERE map_played_id = %s;
+        """, (replay[1],))
+        blue_expected_score, red_expected_score = cur.fetchone()
+        # If the end of the game has been captured by the default score logic we can skip this end score logic
+        if (blue_expected_score == blue_points_captured) and (red_expected_score == red_points_captured):
+            return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+        if in_control == "blue":
+            if blue_expected_score - blue_points_captured == 1:  # Blue is attacking and should win the map
+                log = f"[{current_time}, {first_team_name} has captured point {current_point}]"
+                event_log.append(log)
+                blue_distance = red_distance + 0.01
+        elif in_control == "red":
+            if red_expected_score - red_points_captured == 1:  # Red is attacking and should win the map
+                log = f"[{current_time}, {second_team_name} has captured point {current_point}]"
+                event_log.append(log)
+                red_distance = blue_distance + 0.01
+        # No event log logic is needed for teams that: 1) Are defending and hold the enemy team, 2) Are attacking and fail to capture objective
+        # No event log logic is needed for a draw
+        return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+
+    elif game_mode == "Push": # No event log logic needed, just ensuring distance is correct
+        cur.execute("""
+                    SELECT blue_team_score, red_team_score FROM maps_played WHERE map_played_id = %s;
+                """, (replay[1],))
+        blue_expected_distance, red_expected_distance = cur.fetchone()
+        # If the end of the game has been captured by the default score logic we can skip this end score logic
+        if (blue_expected_distance == blue_distance) and (red_expected_distance == red_distance):
+            return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+        blue_distance, red_distance = blue_expected_distance, red_expected_distance
         return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
 
     return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
@@ -401,6 +445,9 @@ def get_player_data(image: np.ndarray, current_time: int, player_acc: HeroAccumu
         if value == "":
             numbers[key] = player_acc.last_stats[key]
         else:
+            if (key == "deaths") and (int(value) - player_acc.last_stats[key] == 1):
+                log = f"[{current_time}], {player_acc.get_player_name()} died"
+                event_log.append(log)
             numbers[key] = int(value)
             player_acc.last_stats[key] = numbers[key]
 
@@ -583,6 +630,9 @@ for i in range (len(replays)):
                 player_id, player_name = ReadText.read_name(img_crop=name_img, team_id=team_id, reader=reader, cur=cur)
                 player_accs[i].set_player_id(player_id)
                 player_accs[i].set_player_name(player_name)
+                """if i == 3:
+                    player_accs[i].set_player_id(1)
+                    player_accs[i].set_player_name("Vigaboid")"""
 
         # END-GAME RECOGNITION: Detect completely dark pixels where we would expect to see light, indicating end of game
         if (scoreboard_frame[170, 810] < 30).all():
@@ -593,7 +643,13 @@ for i in range (len(replays)):
              event_log) = end_score(current_time=previous_time, game_mode=replay[7], blue_points_captured=blue_team_points_captured,
                       red_points_captured=red_team_points_captured, blue_distance=blue_team_capture_distance,
                       red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point, event_log=event_log)
-
+            log = f"[{previous_time + 1}], Game Ended"
+            event_log.append(log)
+            log = f"Final Score: {first_team_name} {blue_team_points_captured} - {red_team_points_captured} {second_team_name}"
+            event_log.append(log)
+            log = f"Final Distance: {first_team_name} {blue_team_capture_distance} - {red_team_capture_distance} {second_team_name}"
+            event_log.append(log)
+            print(event_log)
             game_running = False
             for i, acc in enumerate(player_accs):
                 team = get_team(numb=i)
@@ -610,7 +666,15 @@ for i in range (len(replays)):
                 opp_id = replay[4] if i < 5 else replay[3]
                 insert_hero_stats(conn=conn, map_id=replay[1], player_id=acc.get_player_id(),
                                   team_id=team_id, opp_id=opp_id, hero_stats=acc.finalize())
-
+                for hero, stats in acc.finalize().items():
+                    # Resolve hero name labels to internal database primary identifiers
+                    cur.execute("""
+                        SELECT hero_id from heroes WHERE LOWER(REPLACE(REPLACE(REPLACE(hero_name, '.', ''), ':', ''), ' ', '_')) = %s;
+                    """, (hero,))
+                    hero_id = cur.fetchone()[0]
+                    log = f"{acc.get_player_id()} - {hero_id}: {stats["seconds"]}, {stats["eliminations"]}, {stats["assists"]}, {stats["deaths"]}, {stats["damage"]}, {stats["healing"]}, {stats["mitigated"]}"
+                    event_log.append(log)
+            print(event_log)
         gray_game_frame = cv2.cvtColor(game_frame, cv2.COLOR_RGB2GRAY)
         gray_scoreboard = cv2.cvtColor(scoreboard_frame, cv2.COLOR_RGB2GRAY)
         # TIME PARSING: Use PyTorch model to track the match clock
