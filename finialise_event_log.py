@@ -1,14 +1,36 @@
 import pandas as pd
 import re
 import psycopg2
-import os
 import numpy as np
 from sklearn.cluster import DBSCAN
 from pathlib import Path
+import HeroDisplayNames
 
 
 conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
 cur = conn.cursor()
+
+def format_hero_names_in_log(filename):
+    with open(filename, "r", encoding="utf-8") as file:
+        text = file.read()
+    # Replace longest names first
+    # so e.g. "soldier_76" is handled as one name.
+    hero_pattern = re.compile(
+        r"(?<![A-Za-z0-9_])("
+        + "|".join(
+            re.escape(hero)
+            for hero in sorted(HeroDisplayNames.HERO_DISPLAY_NAMES, key=len, reverse=True)
+        )
+        + r")(?![A-Za-z0-9_])"
+    )
+
+    text = hero_pattern.sub(
+        lambda match: HeroDisplayNames.HERO_DISPLAY_NAMES[match.group(1)],
+        text
+    )
+
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write(text)
 
 # Converts the hero names gained from the CSV and database into the same format
 def transform_hero_name(hero_name: str) -> str | None:
@@ -398,7 +420,7 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name):
+def main(csv_path, event_log_path, left_team_name, right_team_name, players):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
@@ -450,26 +472,26 @@ def main(csv_path, event_log_path, left_team_name, right_team_name):
 
         ult_charged, ult_used = process_and_save_ults(df=df, map_id=map_played_id, hero_map=heroes, round_starts=rounds)
         for i in range(len(ult_charged)):
-            log = f"[{ult_charged[i][4]}], Player {ult_charged[i][1]} has charged {ult_charged[i][6]}'s ultimate, Charge time: {ult_charged[i][5]}s"
+            log = f"[{ult_charged[i][4]}], {players[ult_charged[i][1]]} has charged {ult_charged[i][6]}'s ultimate, Charge time: {ult_charged[i][5]}s"
             add_to_log.append(log)
         for i in range(len(ult_used)):
-            log = f"[{ult_used[i][4]}], Player {ult_used[i][1]} has used {ult_used[i][6]}'s ultimate, Hold time: {ult_used[i][5]}s"
+            log = f"[{ult_used[i][4]}], {players[ult_used[i][1]]} has used {ult_used[i][6]}'s ultimate, Hold time: {ult_used[i][5]}s"
             add_to_log.append(log)
 
         if map_type_id not in [3, 5]:
             rounds = []
         perks = process_and_save_perks(df=df, map_id=map_played_id, hero_map=heroes, round_starts=rounds)
         for i in range(len(perks)):
-            log = f"[{perks[i][4]}], Player {perks[i][0]} has selected {perks[i][2]} perk [{perks[i][3]}] for {perks[i][6]}"
+            log = f"[{perks[i][4]}], {players[perks[i][0]]} has selected {perks[i][2]} perk [{perks[i][3]}] for {perks[i][6]}"
             add_to_log.append(log)
 
     add_lines_chronologically(event_log_path, add_to_log, len(rounds))
+    format_hero_names_in_log(event_log_path)
 
 """shutil.move(file.path, "./Game CSVs/Processed/")
 print(f"Ingested {f.name}")"""
 
-
-
-main("./Game CSVs/temp/Ranked Blue vs Ranked Red --- match_id-145, map_played_id-396.csv",
+"""main("./Game CSVs/temp/Ranked Blue vs Ranked Red --- match_id-145, map_played_id-396.csv",
      "./Game Logs/Ranked Blue vs Ranked Red --- match_id-145, map_played_id-396.txt",
-     "Ranked Blue", "Ranked Red")
+     "Ranked Blue", "Ranked Red", 
+     players={337:"LVSTFORLIFE", 338: "BERTI", 339: "MARSU", 340: "VOHVO", 341: "IMPOSTER", 1: "Vigaboid", 342: "LOOMIS", 343: "BINKIE", 344: "APPS", 345: "ASD12"})"""
