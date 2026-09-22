@@ -444,10 +444,10 @@ def ingest_to_db(path) -> None:
                 conn.commit()
 
             # Move processed map to different folder
-            shutil.move(file.path, "./Game CSVs/Processed/")
+            shutil.move(file.path, "../Game CSVs/Processed/")
             print(f"Ingested {f.name}")
 
 
 if __name__ == "__main__":
-    csv_path = "Game CSVs"
+    csv_path = "../Game CSVs"
     ingest_to_db(csv_path)

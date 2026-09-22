@@ -485,7 +485,7 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, players):
             log = f"[{perks[i][4]}], {players[perks[i][0]]} has selected {perks[i][2]} perk [{perks[i][3]}] for {perks[i][6]}"
             add_to_log.append(log)
 
-    add_lines_chronologically(event_log_path, add_to_log, len(rounds))
+    add_lines_chronologically(event_log_path, add_to_log, num_rounds)
     format_hero_names_in_log(event_log_path)
 
 """shutil.move(file.path, "./Game CSVs/Processed/")

@@ -1,0 +1,76 @@
+# .github/workflows/release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.14'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller remotezip
+
+      - name: Inject API key
+        env:
+          DB_API_KEY: ${{ secrets.DB_API_KEY }}
+        run: |
+          echo "DB_API_KEY = `"$env:DB_API_KEY`"" > src/secrets_config.py
+
+      - name: Build main app
+        run: pyinstaller build/app.spec
+
+      - name: Build updater
+        run: pyinstaller build/updater.spec
+
+      - name: Generate manifest
+        run: python build/generate_manifest.py
+
+      - name: Zip main app
+        run: |
+          Compress-Archive -Path dist/OverwatchStatsElo/* -DestinationPath dist/OverwatchStatsElo.zip
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: |
+            dist/OverwatchStatsElo.zip
+            dist/manifest.json
+            dist/updater/updater.exe
+
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release-files
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-files/OverwatchStatsElo.zip
+            release-files/manifest.json
+            release-files/updater.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
