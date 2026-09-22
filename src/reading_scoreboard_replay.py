@@ -24,7 +24,7 @@ from config import DB_API_KEY, resource_path, output_path
 
 # Initialize hardware-accelerated desktop capture and deep-learning OCR dependencies
 camera = bettercam.create(output_color="RGB")
-reader = easyocr.Reader(["en"], gpu=True)
+reader = easyocr.Reader(["en"], gpu=False)
 
 conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
 cur = conn.cursor()
@@ -563,7 +563,7 @@ def run_reader(state=None, stop_event=None):
     # --- MAIN PROCESSING LOOP ---
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = time_model_training.TimerOCR()
-    model.load_state_dict(torch.load(resource_path("assets/ReadTimeModel.pth")))
+    model.load_state_dict(torch.load(resource_path("assets/ReadTimeModel.pth"), map_location=torch.device("cpu")))
     model.to(device).eval()
 
     (role_templates, hero_templates, minor_perk_templates, major_perk_templates, stats_templates, escort_score_templates,
