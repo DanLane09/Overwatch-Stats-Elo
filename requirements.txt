@@ -15,7 +15,7 @@ pyside6_addons==6.11.2
 pyside6_essentials==6.11.2
 rapidfuzz==3.14.6
 scikit_learn==1.9.1
-skimage==0.0
+scikit-image==0.26.0
 SQLAlchemy==2.0.53
 streamlit==1.63.0
 torch==2.14.0
