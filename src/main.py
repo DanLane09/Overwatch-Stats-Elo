@@ -3,7 +3,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
 import reading_scoreboard_replay
 import requests, os, subprocess, shutil
-from config import resource_path
+from config import resource_path, hash_file
 from version import __version__
 
 GITHUB_REPO = "DanLane09/Overwatch-Stats-Elo"
@@ -25,18 +25,31 @@ def check_for_update():
         pass  # network hiccup — don't block the app over this
     return None
 
-def ensure_updater_available():
+def ensure_updater_available(updater_url, updater_expected_hash):
     updater_dir = os.path.join(os.environ["LOCALAPPDATA"], "OverwatchStatsElo", "updater")
     os.makedirs(updater_dir, exist_ok=True)
     updater_path = os.path.join(updater_dir, "updater.exe")
-    if not os.path.exists(updater_path):
-        shutil.copy(resource_path("updater/updater.exe"), updater_path)
+
+    needs_download = True
+    if os.path.exists(updater_path):
+        if hash_file(updater_path) == updater_expected_hash:
+            needs_download = False
+
+    if needs_download:
+        resp = requests.get(updater_url, timeout=30)
+        resp.raise_for_status()
+        with open(updater_path, "wb") as f:
+            f.write(resp.content)
+
     return updater_path
 
 def launch_updater(release):
     install_dir = os.path.dirname(sys.executable)
-    updater_path = ensure_updater_available()
-    assets = {a["name"]: a["browser_download_url"] for a in release["assets"]}
+    assets = {a["name"]: a for a in release["assets"]}
+    updater_path = ensure_updater_available(
+        assets["updater.exe"]["browser_download_url"],
+        assets["updater.exe"]["digest"].removeprefix("sha256:"),
+    )
 
     subprocess.Popen([
         updater_path,

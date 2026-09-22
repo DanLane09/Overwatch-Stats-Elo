@@ -1,5 +1,6 @@
 import sys, os
 from secrets_config import DB_API_KEY
+import hashlib
 
 def resource_path(relative_path: str) -> str:
     """
@@ -22,4 +23,11 @@ def output_path(relative_path: str) -> str:
     else:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+def hash_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 

@@ -3,6 +3,7 @@ import requests
 from remotezip import RemoteZip
 import tkinter as tk
 from tkinter import ttk
+from config import hash_file
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -11,13 +12,6 @@ def parse_args():
     p.add_argument("--zip-url", required=True)
     p.add_argument("--relaunch", required=True)
     return p.parse_args()
-
-def hash_file(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 def get_changed_files(install_dir, manifest):
     changed = []
