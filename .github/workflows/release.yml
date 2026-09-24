@@ -49,10 +49,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-files
+          if-no-files-found: error
           path: |
             dist/OverwatchStatsElo.zip
             dist/manifest.json
-            dist/updater/updater.exe
+            dist/updater.exe
 
 
   release:
