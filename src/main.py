@@ -5,6 +5,10 @@ import reading_scoreboard_replay
 import requests, os, subprocess, shutil
 from config import resource_path, hash_file
 from version import __version__
+import threading
+import keyboard
+
+STOP_KEY = "ctrl + esc"
 
 GITHUB_REPO = "DanLane09/Overwatch-Stats-Elo"
 
@@ -70,11 +74,17 @@ class ProcessingState(QObject):
     running_changed = Signal(bool)
     error_occurred = Signal(str)
 
+    def __init__(self):
+        super().__init__()
+        self.stop_event = threading.Event()
+        self.suppress_stop = threading.Event()
+
 
 # Reader worker
 class ReaderWorker(QObject):
     finished = Signal()
     completed = Signal()
+    stopped = Signal()
     error = Signal(str)
 
     def __init__(self, state):
@@ -83,13 +93,23 @@ class ReaderWorker(QObject):
 
     @Slot()
     def run(self):
+        hotkey = None
         try:
+            self.state.stop_event.clear()
             self.state.running_changed.emit(True)
+            hotkey = keyboard.add_hotkey(STOP_KEY, self.state.stop_event.set)
+
             reading_scoreboard_replay.run_reader(state=self.state)
-            self.completed.emit()
+
+            if self.state.stop_event.is_set():
+                self.stopped.emit()
+            else:
+                self.completed.emit()
         except Exception as e:
             self.error.emit(str(e))
         finally:
+            if hotkey is not None:
+                keyboard.remove_hotkey(hotkey)
             self.state.running_changed.emit(False)
             self.finished.emit()
 
@@ -277,7 +297,7 @@ class MainWindow(QMainWindow):
     def update_running(self, running):
         self.run_button.setEnabled(not running)
         if running:
-            self.run_button.setText("PROCESSING")
+            self.run_button.setText("PROCESSING: TO STOP PRESS 'ctrl+esc'")
             self.header_status.setText("● PROCESSING")
             self.header_status.setObjectName("headerStatusRunning")
             self.status_indicator.setObjectName("statusIndicatorRunning")
@@ -338,6 +358,8 @@ class MainWindow(QMainWindow):
         # Final cleanup
         self.thread.finished.connect(self.reader_finished)
 
+        self.worker.stopped.connect(self.reader_stopped)
+
         # Start
         self.thread.start()
 
@@ -350,6 +372,11 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.worker = None
 
+        self.status_indicator.setObjectName("statusIndicator")
+        self.refresh_widget_style(self.status_indicator)
+
+    def reader_stopped(self):
+        self.status_label.setText("Stopped by user")
         self.status_indicator.setObjectName("statusIndicator")
         self.refresh_widget_style(self.status_indicator)
 

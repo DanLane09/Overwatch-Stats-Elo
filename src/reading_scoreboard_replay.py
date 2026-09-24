@@ -20,7 +20,8 @@ import MatchTemplates
 import time_model_training
 import ReadText
 import torch
-from config import DB_API_KEY, resource_path, output_path
+from config import API_KEY, resource_path, output_path
+import threading
 
 # Initialize hardware-accelerated desktop capture and deep-learning OCR dependencies
 camera = bettercam.create(output_color="RGB")
@@ -32,7 +33,6 @@ cur = conn.cursor()
 def update_status(state, message):
     if state is not None:
         state.status_changed.emit(message)
-
 
 def check_white_pixels(image: np.ndarray, positions: list[list[int]]) -> bool:
     """
@@ -559,7 +559,9 @@ def load_templates():
 
     return role_templates, hero_templates, minor_perk_templates, major_perk_templates, stats_templates, escort_score_templates, control_score_templates, flashpoint_score_templates, percentage_templates, control_point_templates, flashpoint_point_templates, push_decimal_templetes
 
-def run_reader(state=None, stop_event=None):
+def run_reader(state=None):
+    stop_event = state.stop_event if state is not None else threading.Event()
+    suppress_stop = getattr(state, "suppress_stop", None) or threading.Event()
     # --- MAIN PROCESSING LOOP ---
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = time_model_training.TimerOCR()
@@ -573,10 +575,13 @@ def run_reader(state=None, stop_event=None):
     replays = get_replays()
     print(len(replays))
     print(replays)
-    time.sleep(5)
+    if stop_event.wait(10):
+        return
     loaded_first_replay = True           # Flag if we need to parse a replay already loaded into the client (importing won't work)
     # Get replay codes specifically
     for i in range (len(replays)):
+        if stop_event.is_set():
+            return
         replay = replays[i]
         if i < len(replays) - 1:
             next_replay = replays[i + 1]
@@ -588,7 +593,6 @@ def run_reader(state=None, stop_event=None):
         previous_layout = CropPositions.layouts["none"]
         # Initialise accumulators for all 10 players
         player_accs = [HeroAccumulator.HeroAccumulator() for _ in range(10)]
-
         # Automated UI interaction loop to import replay codes and handle errors
         if not loaded_first_replay:
             pyautogui.moveTo(1750, 335)
@@ -612,7 +616,7 @@ def run_reader(state=None, stop_event=None):
         print(f"Going in! {replay[2]}")
         if state is not None:
             state.status_changed.emit("Loading replay...")
-        time.sleep(15)
+        stop_event.wait(15)
         if state is not None:
             state.status_changed.emit("Starting scoreboard reader...")
         game_running = True
@@ -664,11 +668,10 @@ def run_reader(state=None, stop_event=None):
             )
             state.time_changed.emit("--:--")
             state.status_changed.emit("Preparing map...")
-
         if state is not None:
             state.status_changed.emit("Reading scoreboard...")
-        while game_running:
-            print(event_log)
+
+        while game_running and not state.stop_event.is_set():
             game_frame = camera.get_latest_frame()
             # Open scoreboard and wait for it to render fully before taking screenshot
             pyautogui.keyDown('tab')
@@ -803,43 +806,46 @@ def run_reader(state=None, stop_event=None):
             previous_layout = layout
             #print(temp_data)
 
-        # Finishing matches in the database
-        # Selecting winning team, updating elo, etc.
-        if replay[0] != next_replay[0]:
-            database_interface.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
-
         camera.stop()
 
-        # --- SAVE MAP DATA ---
-        csv_path = output_path(f'Game CSVs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.csv')
-        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        with open(csv_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                ['time', 'hero', 'player_id', 'ult_charged', 'minor_perk', 'major_perk', 'eliminations', 'assists', 'deaths', 'damage', 'healing', 'mitigated'])
-            writer.writerows(all_data)
+        if not state.stop_event.is_set():
+            # Finishing matches in the database
+            # Selecting winning team, updating elo, etc.
+            if replay[0] != next_replay[0]:
+                database_interface.complete_match(match_id=replay[0], team_ids=[replay[3], replay[4]])
 
-        event_log_path = output_path(f'Game Logs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.txt')
-        os.makedirs(os.path.dirname(event_log_path), exist_ok=True)
-        with open(event_log_path, 'w') as f:
-            for line in event_log:
-                f.write(f"{line}\n")
+            # --- SAVE MAP DATA ---
+            csv_path = output_path(f'Game CSVs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.csv')
+            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+            with open(csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ['time', 'hero', 'player_id', 'ult_charged', 'minor_perk', 'major_perk', 'eliminations', 'assists', 'deaths', 'damage', 'healing', 'mitigated'])
+                writer.writerows(all_data)
 
-        players = {}
-        for acc in player_accs:
-            player_id = acc.get_player_id()
-            player_name = acc.get_player_name()
-            players[player_id] = player_name
+            event_log_path = output_path(f'Game Logs/{first_team_name} vs {second_team_name} --- match_id-{replay[0]}, map_played_id-{replay[1]}.txt')
+            os.makedirs(os.path.dirname(event_log_path), exist_ok=True)
+            with open(event_log_path, 'w') as f:
+                for line in event_log:
+                    f.write(f"{line}\n")
 
-        finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, players=players)
+            players = {}
+            for acc in player_accs:
+                player_id = acc.get_player_id()
+                player_name = acc.get_player_name()
+                players[player_id] = player_name
 
-        conn.commit()
-        if state is not None:
-            state.status_changed.emit("Map data saved.")
-        pyautogui.press("esc") # Exit current replay and go back to career profile
-        if state is not None:
-            state.status_changed.emit("Loading next map...")
-        time.sleep(10)
+            finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, players=players)
+
+            conn.commit()
+            if state is not None:
+                state.status_changed.emit("Map data saved.")
+            pyautogui.press("esc") # Exit current replay and go back to career profile
+            if state is not None:
+                state.status_changed.emit("Loading next map...")
+            if stop_event.wait(10):
+                return
+
     if state is not None:
         state.status_changed.emit("All maps processed.")
 

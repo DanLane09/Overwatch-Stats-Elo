@@ -2,6 +2,8 @@ import sys, os
 from secrets_config import DB_API_KEY
 import hashlib
 
+API_KEY = DB_API_KEY
+
 def resource_path(relative_path: str) -> str:
     """
     relative_path should be given relative to the project root, e.g. "assets/ReadTimeModel.pth"
