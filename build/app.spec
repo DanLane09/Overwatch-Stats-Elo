@@ -22,6 +22,7 @@ a = Analysis(
     datas=datas + [
         (os.path.join(PROJECT_ROOT, 'assets', 'ReadTimeModel.pth'), 'assets'),
         (os.path.join(PROJECT_ROOT, 'assets', 'Images'), 'assets/Images'),
+        (os.path.join(PROJECT_ROOT, 'assets', 'icon.ico'), 'assets'),
     ],
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -49,11 +50,12 @@ exe = EXE(
     splash,                    # added — shows splash.png immediately on launch
     exclude_binaries=True,     # changed — leaves binaries out of the exe itself
     name='OWTVstats',
+    icon=os.path.join(PROJECT_ROOT, 'assets', 'icon.ico'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -1,6 +1,7 @@
 import sys
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QIcon
 import reading_scoreboard_replay
 import requests, os, subprocess, shutil
 from config import resource_path, hash_file
@@ -606,6 +607,7 @@ def main():
     app.setApplicationName(
         "Overwatch Scoreboard Reader"
     )
+    app.setWindowIcon(QIcon(resource_path("assets/icon.ico")))
     window = MainWindow()
     if getattr(sys, 'frozen', False):
         import pyi_splash
