@@ -7,8 +7,8 @@ from pathlib import Path
 import HeroDisplayNames
 
 
-conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
-cur = conn.cursor()
+"""conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
+cur = conn.cursor()"""
 
 def format_hero_names_in_log(filename):
     with open(filename, "r", encoding="utf-8") as file:
@@ -420,22 +420,13 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name, players):
+def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
         leftover, map_played_id = csv_path.name.split("map_played_id-")
         map_played_id = int(map_played_id.rstrip(".csv"))
-
-        cur.execute("""SELECT mp.blue_team_id, mp.red_team_id, m.map_type_id FROM maps_played mp 
-                    JOIN maps m ON mp.map_id = m.map_id WHERE mp.map_played_id = %s""", (map_played_id,))
-        blue_team_id, red_team_id, map_type_id = cur.fetchone()
-        map_type_id = int(map_type_id)
-
-        cur.execute("""SELECT * FROM heroes""")
-        reverse_heroes = dict(cur.fetchall())
-        heroes = {transform_hero_name(v): k for k, v in reverse_heroes.items()}
-
+        blue_team_id, red_team_id, map_type = left_team_id, right_team_id, map_type
 
         df = pd.read_csv(f)
         df["original_index"] = range(len(df))
@@ -478,7 +469,7 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, players):
             log = f"[{ult_used[i][4]}], {players[ult_used[i][1]]} has used {ult_used[i][6]}'s ultimate, Hold time: {ult_used[i][5]}s"
             add_to_log.append(log)
 
-        if map_type_id not in [3, 5]:
+        if map_type not in ("escort", "hybrid"):
             rounds = []
         perks = process_and_save_perks(df=df, map_id=map_played_id, hero_map=heroes, round_starts=rounds)
         for i in range(len(perks)):
