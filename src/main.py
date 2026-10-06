@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Overwatch Scoreboard Reader")
+        self.setWindowIcon(QIcon(resource_path("assets/icon.ico")))
         self.setMinimumSize(760, 560)
         self.resize(820, 620)
 
