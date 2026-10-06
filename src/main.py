@@ -58,8 +58,8 @@ def launch_updater(release):
     subprocess.Popen([
         updater_path,
         "--install-dir", install_dir,
-        "--manifest-url", assets["manifest.json"],
-        "--zip-url", assets["OverwatchStatsElo.zip"],
+        "--manifest-url", assets["manifest.json"]["browser_download_url"],
+        "--zip-url", assets["OverwatchStatsElo.zip"]["browser_download_url"],
         "--relaunch", sys.executable,
     ])
     sys.exit(0)
