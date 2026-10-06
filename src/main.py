@@ -60,12 +60,11 @@ def launch_updater(release):
         updater_path,
         "--install-dir", install_dir,
         "--manifest-url", assets["manifest.json"]["browser_download_url"],
-        "--zip-url", assets["OverwatchStatsElo.zip"]["browser_download_url"],
+        "--exe-url", assets["OWTVstats.exe"]["browser_download_url"],
+        "--runtime-url", assets["runtime.zip"]["browser_download_url"],
         "--relaunch", sys.executable,
     ])
     sys.exit(0)
-
-
 
 class ProcessingState(QObject):
     # Signals sent from the scoreboard reader to the UI.

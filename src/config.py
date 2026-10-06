@@ -26,10 +26,19 @@ def output_path(relative_path: str) -> str:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
 
+import hashlib, os
+
 def hash_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
+    return h.hexdigest()
+
+def hash_folder(path):
+    h = hashlib.sha256()
+    for root, _, files in sorted(os.walk(path)):
+        for f in sorted(files):
+            h.update(hash_file(os.path.join(root, f)).encode())
     return h.hexdigest()
 

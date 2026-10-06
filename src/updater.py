@@ -1,56 +1,82 @@
-import argparse, hashlib, os, shutil, subprocess, sys, time
+import argparse, os, shutil, subprocess, sys, time, zipfile
 import requests
-from remotezip import RemoteZip
+from config import hash_file, hash_folder
 import tkinter as tk
 from tkinter import ttk
-from config import hash_file
 
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--install-dir", required=True)
     p.add_argument("--manifest-url", required=True)
-    p.add_argument("--zip-url", required=True)
+    p.add_argument("--exe-url", required=True)
+    p.add_argument("--runtime-url", required=True)
     p.add_argument("--relaunch", required=True)
     return p.parse_args()
 
-def get_changed_files(install_dir, manifest):
-    changed = []
-    for rel_path, remote_hash in manifest.items():
-        local_path = os.path.join(install_dir, rel_path)
-        if not os.path.exists(local_path) or hash_file(local_path) != remote_hash:
-            changed.append(rel_path)
-    return changed
+def download(url, dest_path, on_progress):
+    resp = requests.get(url, stream=True, timeout=60)
+    resp.raise_for_status()
+    total = int(resp.headers.get("content-length", 0))
+    downloaded = 0
+    with open(dest_path, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            f.write(chunk)
+            downloaded += len(chunk)
+            if total:
+                on_progress(downloaded / total * 100)
 
 def main():
     args = parse_args()
-    time.sleep(1)  # give the main app a moment to fully exit and release file locks
+    time.sleep(1)  # let the main app release its file locks
 
     root = tk.Tk()
     root.title("Updating OWTV Stats tracker")
     root.geometry("400x100")
     root.resizable(False, False)
-    label = tk.Label(root, text="Checking for changes...")
+    label = tk.Label(root, text="Checking for updates...")
     label.pack(pady=10)
-    progress = ttk.Progressbar(root, length=350, mode="determinate")
+    progress = ttk.Progressbar(root, length=350, mode="determinate", maximum=100)
     progress.pack(pady=10)
     root.update()
 
     manifest = requests.get(args.manifest_url, timeout=10).json()
-    changed_files = get_changed_files(args.install_dir, manifest)
-    total = len(changed_files)
 
-    if total == 0:
+    exe_path = os.path.join(args.install_dir, "OWTVstats.exe")
+    internal_path = os.path.join(args.install_dir, "_internal")
+
+    exe_changed = not os.path.exists(exe_path) or hash_file(exe_path) != manifest["exe_hash"]
+    runtime_changed = not os.path.exists(internal_path) or hash_folder(internal_path) != manifest["runtime_hash"]
+
+    def report(pct):
+        progress["value"] = pct
+        root.update()
+
+    if not exe_changed and not runtime_changed:
         label.config(text="Already up to date.")
         root.update()
         time.sleep(1)
     else:
-        progress["maximum"] = total
-        with RemoteZip(args.zip_url) as zf:
-            for i, rel_path in enumerate(changed_files, start=1):
-                label.config(text=f"Updating file {i} of {total}...")
-                progress["value"] = i
-                root.update()
-                zf.extract(rel_path, args.install_dir)
+        if exe_changed:
+            label.config(text="Downloading app update...")
+            root.update()
+            tmp_exe = exe_path + ".new"
+            download(args.exe_url, tmp_exe, report)
+            os.replace(tmp_exe, exe_path)
+
+        if runtime_changed:
+            label.config(text="Downloading dependencies (larger download)...")
+            progress["value"] = 0
+            root.update()
+            tmp_zip = os.path.join(args.install_dir, "runtime_update.zip")
+            download(args.runtime_url, tmp_zip, report)
+
+            label.config(text="Installing...")
+            root.update()
+            if os.path.exists(internal_path):
+                shutil.rmtree(internal_path)
+            with zipfile.ZipFile(tmp_zip) as zf:
+                zf.extractall(internal_path)
+            os.remove(tmp_zip)
 
     root.destroy()
     subprocess.Popen([args.relaunch])

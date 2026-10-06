@@ -38,12 +38,19 @@ jobs:
       - name: Build updater
         run: pyinstaller build/updater.spec
 
-      - name: Generate manifest
-        run: python build/generate_manifest.py
-
-      - name: Zip main app
+      - name: Zip full app (for new installs)
         run: |
           Compress-Archive -Path dist/OverwatchStatsElo/* -DestinationPath dist/OverwatchStatsElo.zip
+
+      - name: Zip runtime (for updater)
+        run: |
+          Compress-Archive -Path dist/OverwatchStatsElo/_internal/* -DestinationPath dist/runtime.zip
+
+      - name: Copy exe for updater use
+        run: Copy-Item dist/OverwatchStatsElo/OWTVstats.exe dist/OWTVstats.exe
+
+      - name: Generate manifest
+        run: python build/generate_manifest.py
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -52,6 +59,8 @@ jobs:
           if-no-files-found: error
           path: |
             dist/OverwatchStatsElo.zip
+            dist/OWTVstats.exe
+            dist/runtime.zip
             dist/manifest.json
             dist/updater.exe
 
@@ -72,6 +81,8 @@ jobs:
         with:
           files: |
             release-files/OverwatchStatsElo.zip
+            release-files/OWTVstats.exe
+            release-files/runtime.zip
             release-files/manifest.json
             release-files/updater.exe
           generate_release_notes: true
