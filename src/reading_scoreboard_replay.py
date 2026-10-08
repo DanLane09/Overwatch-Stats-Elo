@@ -154,7 +154,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
                                                                                             targets=[[255, 255, 255], [239, 46, 81]])
                 if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 1.2 - (int(red_new_distance) - int(red_distance))) > 2):
                     return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
-                log = f"[{current_time}], {first_team_name} captured point {current_point},{first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
+                log = f"[{current_time}], {first_team_name} captured point {current_point}, {first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
                 event_log.append(log)
                 #print(f"Blue team has captured the objective at {current_time}")
                 #print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
@@ -171,7 +171,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
                                                                                             targets=[[0, 190, 255], [255, 255, 255]])
                 if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 1.2 - (int(blue_new_distance) - int(blue_distance))) > 2):
                     return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
-                log = f"[{current_time}], {second_team_name} captured point {current_point},{first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
+                log = f"[{current_time}], {second_team_name} captured point {current_point}, {first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
                 event_log.append(log)
                 #print(f"Red team has captured the objective at {current_time}")
                 #print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
@@ -267,7 +267,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
                                                                                                  [239, 46, 81]])
             if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 0.7 - (int(red_new_distance) - int(red_distance))) > 5):
                 return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
-            log = f"[{current_time}], {first_team_name} captured point {current_point},{first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
+            log = f"[{current_time}], {first_team_name} captured point {current_point}, {first_team_name} {blue_distance}% - {red_new_distance}% {second_team_name}"
             event_log.append(log)
             #print(f"Blue team has captured the objective at {current_time}")
             #print(f"Blue capture progress: {blue_distance}, Red capture progress: {red_new_distance}")
@@ -285,7 +285,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
                                                                                                  [255, 255, 255]])
             if (blue_new_distance == "" or red_new_distance == "") or (abs((current_time - previous_capture_time) / 0.7 - (int(red_new_distance) - int(red_distance))) > 5):
                 return blue_points_captured, red_points_captured, blue_distance, red_distance, in_control, current_point, event_log, previous_capture_time
-            log = f"[{current_time}], {second_team_name} captured point {current_point},{first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
+            log = f"[{current_time}], {second_team_name} captured point {current_point}, {first_team_name} {blue_new_distance}% - {red_distance}% {second_team_name}"
             event_log.append(log)
             #print(f"Red team has captured the objective at {current_time}")
             #print(f"Blue capture progress: {blue_new_distance}, Red capture progress: {red_distance}")
@@ -382,12 +382,12 @@ def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_
         if in_control == "blue":
             blue_points_captured += 1
             blue_distance = 100
-            log = f"[{current_time}], {first_team_name} won point {current_point},{first_team_name} 100% - {red_distance}% {second_team_name}"
+            log = f"[{current_time}], {first_team_name} won point {current_point}, {first_team_name} 100% - {red_distance}% {second_team_name}"
             event_log.append(log)
         else:
             red_points_captured += 1
             red_distance = 100
-            log = f"[{current_time}], {second_team_name} won point {current_point},{first_team_name} {blue_distance}% - 100% {second_team_name}"
+            log = f"[{current_time}], {second_team_name} won point {current_point}, {first_team_name} {blue_distance}% - 100% {second_team_name}"
             event_log.append(log)
         log = f"[{current_time + 1}], Game ended"
         event_log.append(log)
