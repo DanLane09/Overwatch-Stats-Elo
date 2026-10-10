@@ -4,7 +4,10 @@ import psycopg2
 import numpy as np
 from sklearn.cluster import DBSCAN
 from pathlib import Path
+from collections import defaultdict
 import HeroDisplayNames
+import requests
+from config import API_KEY
 
 
 """conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
@@ -228,6 +231,113 @@ def _died_between(group: pd.DataFrame, start_t, end_t) -> bool:
     """Whether this player has any death recorded within [start_t, end_t]."""
     return ((group['time'] >= start_t) & (group['time'] <= end_t) & (group['deaths_delta'] > 0)).any()
 
+
+def count_fight_starts(df, start_times):
+    snaps = df[["player_id", "hero_id", "time", "original_index"]].sort_values(
+        ["player_id", "time", "original_index"]
+    )
+    counts = defaultdict(int)
+
+    for start in start_times:
+        # Latest snapshot per player at or before the fight start
+        latest = snaps[snaps["time"] <= start].groupby("player_id").tail(1)
+        for player_id, hero_id in zip(latest["player_id"], latest["hero_id"]):
+            if pd.notna(hero_id):
+                counts[(int(player_id), int(hero_id))] += 1
+
+    return counts
+
+
+def summarize_ults(charge_events, usage_events, fight_start_counts):
+    stats = defaultdict(lambda: {"ults_used": 0, "total_charge_time": 0, "fight_starts": 0})
+
+    for _, player_id, hero_id, _, _, charge_time, _ in charge_events:
+        stats[(player_id, hero_id)]["total_charge_time"] += charge_time
+
+    for _, player_id, hero_id, _, _, _, _ in usage_events:
+        stats[(player_id, hero_id)]["ults_used"] += 1
+
+    for (player_id, hero_id), n in fight_start_counts.items():
+        stats[(player_id, hero_id)]["fight_starts"] += n
+
+    return [
+        {
+            "player_id": player_id,
+            "hero_id": hero_id,
+            "ults_used": s["ults_used"],
+            "total_charge_time": s["total_charge_time"],
+            "fight_starts": s["fight_starts"],
+        }
+        for (player_id, hero_id), s in stats.items()
+    ]
+
+def build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
+                         blue_team_id, red_team_id, ult_used, event_log_file):
+    """Build one payload per fight. team1 = blue/left team, team2 = red/right team."""
+    player_team = df.drop_duplicates("player_id").set_index("player_id")["team_id"].to_dict()
+
+    with open(event_log_file, "r", encoding="utf-8") as file:
+        lines = [line.rstrip("\n") for line in file]
+    # Parse "[time], text" log lines into dicts once
+    parsed_events = []
+    for line in lines:
+        m = re.match(r"^\[(\d+)\],\s*(.*)$", line.strip())
+        if m:
+            parsed_events.append({"time": int(m.group(1)), "event": m.group(2)})
+
+    payloads = []
+    for i, (start, end, winner) in enumerate(zip(start_times, end_times, winning_teams)):
+        start, end = int(start), int(end)
+        window = df[(df["time"] >= start) & (df["time"] <= end)]
+
+        def team_sum(team_id, col):
+            return int(window.loc[window["team_id"] == team_id, col].sum())
+
+        loser = red_team_id if winner == blue_team_id else blue_team_id
+
+        team1_ults, team2_ults = [], []
+        for _, player_id, hero_id, _, used_time, _, _ in ult_used:
+            if start <= used_time <= end and hero_id is not None:
+                entry = {"hero": int(hero_id)}
+                if player_team.get(player_id) == blue_team_id:
+                    team1_ults.append(entry)
+                else:
+                    team2_ults.append(entry)
+
+        payloads.append({
+            "matchMap": match_map,
+            "fightNumber": i + 1,
+            "fightStartTime": start,
+            "fightLength": end - start,
+            "winningTeam": int(winner),
+            "losingTeam": int(loser),
+            "team1Kills": team_sum(red_team_id, "deaths_delta"),
+            "team2Kills": team_sum(blue_team_id, "deaths_delta"),
+            "team1Deaths": team_sum(blue_team_id, "deaths_delta"),
+            "team2Deaths": team_sum(red_team_id, "deaths_delta"),
+            "team1Ults": team1_ults,
+            "team2Ults": team2_ults,
+            "eventLog": {"events": [e for e in parsed_events if start <= e["time"] <= end]},
+        })
+    return payloads, parsed_events
+
+
+def post_fights(match_map, api_url, df, start_times, end_times, winning_teams,
+                blue_team_id, red_team_id, ult_used, event_log_file,
+                headers=None, timeout=10):
+    payloads, event_log = build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
+                                    blue_team_id, red_team_id, ult_used, event_log_file)
+    results = []
+    for payload in payloads:
+        try:
+            response = requests.post(api_url, json=payload, headers = {"X-API-Key": API_KEY}, timeout=timeout)
+            response.raise_for_status()
+            results.append((payload["fightNumber"], response.status_code, None))
+        except requests.RequestException as e:
+            results.append((payload["fightNumber"], None, str(e)))
+            print(f"Fight {payload['fightNumber']} failed: {e}")
+    return results, event_log
+
 def process_and_save_ults(df: pd.DataFrame, map_id: int, hero_map: dict, round_starts: list):
     df = df.sort_values(['player_id', 'time', 'original_index']).copy()
     df['status_change'] = df.groupby('player_id')['ult_charged'].shift() != df['ult_charged']
@@ -420,7 +530,7 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes):
+def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
@@ -441,6 +551,7 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
         df = detect_ult_usage(df=df)
 
         start_times, end_times, winning_teams = detect_team_fights(df=df)
+        fight_start_counts = count_fight_starts(df, start_times)
         for i in range(len(start_times)):
             log = f"[{start_times[i]}], Fight {i + 1} started"
             add_to_log.append(log)
@@ -469,6 +580,8 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
             log = f"[{ult_used[i][4]}], {players[ult_used[i][1]]} has used {ult_used[i][6]}'s ultimate, Hold time: {ult_used[i][5]}s"
             add_to_log.append(log)
 
+        ult_summary = summarize_ults(charge_events=ult_charged, usage_events=ult_used, fight_start_counts=fight_start_counts)
+
         if map_type not in ("escort", "hybrid"):
             rounds = []
         perks = process_and_save_perks(df=df, map_id=map_played_id, hero_map=heroes, round_starts=rounds)
@@ -479,10 +592,18 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
     add_lines_chronologically(event_log_path, add_to_log, num_rounds)
     format_hero_names_in_log(event_log_path)
 
+    results, event_log = post_fights(match_map=match_map_id, api_url="https://owtv.gg/api/map-fight", df=df, start_times=start_times,
+                end_times=end_times, winning_teams=winning_teams,
+                blue_team_id=blue_team_id, red_team_id=red_team_id, ult_used=ult_used, event_log_file=event_log_path)
+
+    return ult_summary, event_log
+
 """shutil.move(file.path, "./Game CSVs/Processed/")
 print(f"Ingested {f.name}")"""
 
-"""main("./Game CSVs/temp/Ranked Blue vs Ranked Red --- match_id-145, map_played_id-396.csv",
-     "./Game Logs/Ranked Blue vs Ranked Red --- match_id-145, map_played_id-396.txt",
-     "Ranked Blue", "Ranked Red", 
-     players={337:"LVSTFORLIFE", 338: "BERTI", 339: "MARSU", 340: "VOHVO", 341: "IMPOSTER", 1: "Vigaboid", 342: "LOOMIS", 343: "BINKIE", 344: "APPS", 345: "ASD12"})"""
+"""x, y = main("../Game CSVs/99DIVINE vs MURASH GAMING --- match_id-1628, map_played_id-3852.csv",
+     "../Game Logs/99DIVINE vs MURASH GAMING --- match_id-1628, map_played_id-3852.txt",
+     "99DIVINE", "MURASH GAMING", 149, 228, "flashpoint",
+     players={1521:"MN3", 1280: "ALTHOUGH", 488: "Ichi", 163: "Sakume", 877: "Umi", 159: "ky0n", 236: "Viper", 447: "PEPPI", 332: "epic", 477: "orca"},
+     heroes={'doctrine': 54, 'dmon': 53, 'shion': 52, 'zenyatta': 51, 'zarya': 50, 'wuyang': 49, 'wrecking_ball': 48, 'winston': 47, 'widowmaker': 46, 'venture': 45, 'vendetta': 44, 'tracer': 43, 'torbjorn': 42, 'symmetra': 41, 'sombra': 40, 'soldier_76': 39, 'sojourn': 38, 'sigma': 37, 'sierra': 36, 'roadhog': 35, 'reinhardt': 34, 'reaper': 33, 'ramattra': 32, 'pharah': 31, 'orisa': 30, 'moira': 29, 'mizuki': 28, 'mercy': 27, 'mei': 26, 'mauga': 25, 'lucio': 24, 'lifeweaver': 23, 'kiriko': 22, 'juno': 21, 'junkrat': 20, 'junker_queen': 19, 'jetpack_cat': 18, 'illari': 17, 'hazard': 16, 'hanzo': 15, 'genji': 14, 'freja': 13, 'emre': 12, 'echo': 11, 'doomfist': 10, 'domina': 9, 'dva': 8, 'cassidy': 7, 'brigitte': 6, 'bastion': 5, 'baptiste': 4, 'ashe': 3, 'anran': 2, 'ana': 1},
+     match_map_id=3852)"""

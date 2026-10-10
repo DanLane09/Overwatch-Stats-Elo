@@ -204,13 +204,13 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
 
             if in_control == "blue":
                 in_control = None
-                log = f"[{current_time}], {first_team_name} won point {point},{first_team_name} 100% - {red_new_distance}% {second_team_name}"
+                log = f"[{current_time}], {first_team_name} won point {point}, {first_team_name} 100% - {red_new_distance}% {second_team_name}"
                 event_log.append(log)
                 #print(f"Blue team has won point {point}")
                 return blue_team_score, red_team_score, 100, red_new_distance, in_control, point, event_log, current_time
             elif in_control == "red":
                 in_control = None
-                log = f"[{current_time}], {second_team_name} won point {point},{first_team_name} {blue_new_distance}% - 100% {second_team_name}"
+                log = f"[{current_time}], {second_team_name} won point {point}, {first_team_name} {blue_new_distance}% - 100% {second_team_name}"
                 event_log.append(log)
                 #print(f"Red team has won point {point}")
                 return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point, event_log, current_time
@@ -237,13 +237,13 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
 
                 if in_control == "blue":
                     in_control = None
-                    log = f"[{current_time}], {first_team_name} won flashpoint {current_point}"
+                    log = f"[{current_time}], {first_team_name} won Flashpoint {current_point}"
                     event_log.append(log)
                     #print(f"Blue team has won point {current_point}")
                     return blue_team_score, red_team_score, 100, red_distance, in_control, current_point, event_log, current_time
                 elif in_control == "red":
                     in_control = None
-                    log = f"[{current_time}], {second_team_name} won flashpoint {current_point}"
+                    log = f"[{current_time}], {second_team_name} won Flashpoint {current_point}"
                     event_log.append(log)
                     #print(f"Red team has won point {current_point}")
                     return blue_team_score, red_team_score, blue_distance, 100, in_control, current_point, event_log, current_time
@@ -312,7 +312,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
                                                          crop_positions=CropPositions.flashpoint["point_selection"],
                                                          templates=point_templetes)
                 if point is not None:
-                    log = f"Flashpoint {point} unlocked"
+                    log = f"[{current_time}], Flashpoint {point} unlocked"
                     event_log.append(log)
                     #print(f"Control point {point} unlocked")
 
@@ -321,13 +321,13 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
 
             if in_control == "blue":
                 in_control = None
-                log = f"[{current_time}], {first_team_name} won flashpoint {point}"
+                log = f"[{current_time}], {first_team_name} won Flashpoint {point}"
                 event_log.append(log)
                 #print(f"Blue team has won point {point}")
                 return blue_team_score, red_team_score, 100, red_new_distance, in_control, point, event_log, current_time
             elif in_control == "red":
                 in_control = None
-                log = f"[{current_time}], {second_team_name} won flashpoint {point}"
+                log = f"[{current_time}], {second_team_name} won Flashpoint {point}"
                 event_log.append(log)
                 #print(f"Red team has won point {point}")
                 return blue_team_score, red_team_score, blue_new_distance, 100, in_control, point, event_log, current_time
@@ -374,7 +374,7 @@ def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_
               blue_distance: float, red_distance: float, in_control: str|None, current_point: str|None, event_log: list,
               team_names, map_played_id, expected_scores) -> Tuple[int, int, float, float, list]:
     first_team_name, second_team_name = team_names
-    if (game_mode == "control") or (game_mode == "flashpoint"):
+    if game_mode == "control":
         blue_expected_score, red_expected_score = expected_scores
         # If the end of the game has been captured by the default score logic we can skip this end score logic
         if (blue_expected_score == blue_points_captured) and (red_expected_score == red_points_captured):
@@ -382,12 +382,31 @@ def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_
         if in_control == "blue":
             blue_points_captured += 1
             blue_distance = 100
-            log = f"[{current_time}], {first_team_name} won point {current_point}, {first_team_name} 100% - {red_distance}% {second_team_name}"
+            log = f"[{current_time}], {first_team_name} won Control point {current_point}, {first_team_name} 100% - {red_distance}% {second_team_name}"
             event_log.append(log)
         else:
             red_points_captured += 1
             red_distance = 100
-            log = f"[{current_time}], {second_team_name} won point {current_point}, {first_team_name} {blue_distance}% - 100% {second_team_name}"
+            log = f"[{current_time}], {second_team_name} won Control point {current_point}, {first_team_name} {blue_distance}% - 100% {second_team_name}"
+            event_log.append(log)
+        log = f"[{current_time + 1}], Game ended"
+        event_log.append(log)
+        return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+
+    elif game_mode == "flashpoint":
+        blue_expected_score, red_expected_score = expected_scores
+        # If the end of the game has been captured by the default score logic we can skip this end score logic
+        if (blue_expected_score == blue_points_captured) and (red_expected_score == red_points_captured):
+            return blue_points_captured, red_points_captured, blue_distance, red_distance, event_log
+        if in_control == "blue":
+            blue_points_captured += 1
+            blue_distance = 100
+            log = f"[{current_time}], {first_team_name} won Flashpoint {current_point}, {first_team_name} 100% - {red_distance}% {second_team_name}"
+            event_log.append(log)
+        else:
+            red_points_captured += 1
+            red_distance = 100
+            log = f"[{current_time}], {second_team_name} won Flashpoint {current_point}, {first_team_name} {blue_distance}% - 100% {second_team_name}"
             event_log.append(log)
         log = f"[{current_time + 1}], Game ended"
         event_log.append(log)
@@ -535,11 +554,11 @@ def get_replays():
         },
         params=[
             ("where[replayCode][exists]", "true"),
-            ("where[match.version][equals]", "2.24.1.1.153619"),
+            ("where[match.version][equals]", "2.25.0.0.154088"),
             ("where[replayParsed][exists]", "false"),
             ("where[blueTeam][exists]", "true"),
             ("where[redTeam][exists]", "true"),
-            ("sort[equals]", "updatedAt"),
+            ("sort", "match.startDate,mapIndex"),
             ("limit", "1"),
         ],
     )
@@ -567,7 +586,7 @@ def get_replays():
             red_score = data["team2Score"]
 
     replay = [data["match"]["id"], data["id"], data["replayCode"], data["blueTeam"]["id"], data["redTeam"]["id"], blue_score, red_score,
-                  data["map"]["mode"], data["map"]["name"], data["blueTeam"]["name"], data["redTeam"]["name"]]
+                  data["map"]["mode"], data["map"]["name"], data["blueTeam"]["name"], data["redTeam"]["name"], data["playerStats"]["docs"]]
 
     return replay
 
@@ -658,7 +677,6 @@ def run_reader(state=None):
         previous_layout = CropPositions.layouts["none"]
         # Initialise accumulators for all 10 players
         player_accs = [HeroAccumulator.HeroAccumulator() for _ in range(10)]
-        print("1")
 
         blue_players = get_team_players(replay[3])
         red_players = get_team_players(replay[4])
@@ -669,7 +687,6 @@ def run_reader(state=None):
         expected_scores = (replay[5], replay[6])
 
         # Automated UI interaction loop to import replay codes and handle errors
-        print("2")
         pyautogui.moveTo(1750, 335)
         pyautogui.leftClick()
         time.sleep(1)
@@ -684,6 +701,15 @@ def run_reader(state=None):
             pyautogui.leftClick()
             # TODO Assign error to map in DB
             continue
+        x = requests.patch(
+            url=f"https://owtv.gg/api/match-map/{replay[1]}",
+            headers={
+                "X-API-Key": API_KEY,
+            },
+            json={"replayParsed": "in-progress"}
+
+        )
+        print(x)
         pyautogui.moveTo(1025, 624)
         pyautogui.leftClick()
         print(f"Going in! {replay[2]}")
@@ -723,6 +749,7 @@ def run_reader(state=None):
         current_point = None
 
         event_log = []
+        parse_error = False
 
         if state is not None:
             state.map_changed.emit(
@@ -763,6 +790,17 @@ def run_reader(state=None):
                     player_ids.append(acc.get_player_id())
                 if len(set(player_ids)) != 10:
                     print("LESS THAN 10 PLAYERS")
+                    parse_error = True
+                    x = requests.patch(
+                        url=f"https://owtv.gg/api/match-map/{replay[1]}",
+                        headers={
+                            "X-API-Key": API_KEY,
+                        },
+                        json={"replayParsed": "error-not-enough-players"}
+
+                    )
+                    print(x)
+                    break
 
             # END-GAME RECOGNITION: Detect completely dark pixels where we would expect to see light, indicating end of game
             if (scoreboard_frame[170, 810] < 30).all():
@@ -880,7 +918,12 @@ def run_reader(state=None):
 
         camera.stop()
 
-        if not state.stop_event.is_set():
+        if parse_error:
+            pyautogui.press("esc")
+            pyautogui.moveTo(1075, 650)
+            pyautogui.leftClick()
+
+        if not state.stop_event.is_set() and not parse_error:
             # Finishing matches in the database
             # Selecting winning team, updating elo, etc.
             """if replay[0] != next_replay[0]:
@@ -906,7 +949,40 @@ def run_reader(state=None):
                 player_name = acc.get_player_name()
                 players[player_id] = player_name
 
-            finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, left_team_id=replay[3], right_team_id=replay[4], map_type=replay[7], players=players, heroes=heroes)
+            player_hero_summary, parsed_event_log = finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, left_team_id=replay[3], right_team_id=replay[4], map_type=replay[7], players=players, heroes=heroes, match_map_id=replay[1])
+            player_map_stats = replay[11]
+
+            player_hero_map_stats_url = "https://owtv.gg/api/player-map-stats-hero"
+            for acc in player_accs:
+                for hero, stats in acc.finalize().items():
+                    hero_id = heroes[hero]
+                    for log in player_hero_summary:
+                        if (log["hero_id"] == hero_id) and (log["player_id"] == acc.get_player_id()):
+                            for player in player_map_stats:
+                                if player["person"] == acc.get_player_id():
+                                    player_map_stat_hero = {"playerMapStats": player["id"], "hero":hero_id, "playtime": stats["seconds"],
+                                                            "totalElims": stats["eliminations"], "totalAssists": stats["assists"], "totalDeaths": stats["deaths"],
+                                                            "totalDmg": stats["damage"], "totalHeal": stats["healing"], "totalMit": stats["mitigated"],
+                                                            "fightsTotal": log["fight_starts"], "totalUltsUsed": log["ults_used"], "totalUltChargeTime": log["total_charge_time"]}
+
+                                    x = requests.post(
+                                        url = player_hero_map_stats_url,
+                                        headers = {
+                                            "X-API-Key": API_KEY,
+                                        },
+                                        json = player_map_stat_hero,
+                                    )
+                                    print(x.text)
+
+            x = requests.patch(
+                url = f"https://owtv.gg/api/match-map/{replay[1]}",
+                headers={
+                    "X-API-Key": API_KEY,
+                },
+                json = {"replayParsed": "complete", "eventLog": {"events": [e for e in parsed_event_log]}}
+
+            )
+            print(x)
 
             # conn.commit()
             if state is not None:
