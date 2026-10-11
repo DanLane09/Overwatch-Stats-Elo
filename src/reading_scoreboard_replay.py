@@ -20,13 +20,16 @@ import HeroAccumulator
 import LoadTemplates
 import MatchTemplates
 import time_model_training
+from WindowCapture import WindowCapture
+from settings import scale_xy, get_resolution
 import ReadText
 import torch
 from config import API_KEY, resource_path, output_path
 import threading
 
 # Initialize hardware-accelerated desktop capture and deep-learning OCR dependencies
-camera = bettercam.create(output_color="RGB")
+#camera = bettercam.create(output_color="RGB")
+camera = WindowCapture(window_name="Overwatch", output_color="RGB")
 reader = easyocr.Reader(["en"], gpu=False)
 
 """conn = psycopg2.connect(host="localhost", port=5432, dbname="experiment_ow_stats_elo", user="postgres", password="pass")
@@ -47,11 +50,12 @@ def get_pixel(image: np.ndarray, position: list[int]) -> int:
     x, y = position
     return image[y, x]
 
-def crop(image: np.ndarray, box: list[int]) -> np.ndarray:
+def crop(image: np.ndarray, box: list[int], y_offset: int) -> np.ndarray:
     """
     Extracts a region from an image using [x_start, x_end, y_start, y_end] box limits.
     """
     x1, x2, y1, y2 = box
+    y1, y2 = y1 + y_offset, y2 + y_offset
     return image[y1:y2, x1:x2]
 
 def get_team(numb: int) -> str:
@@ -95,12 +99,12 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
             distance_crop = CropPositions.escort["overtime_distance"]
             blue_team_score = blue_points_captured
             red_team_score = red_points_captured
-            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"]), distance_templates)
-            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"]), distance_templates)
+            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"], 0), distance_templates)
+            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"], 0), distance_templates)
         else:
             blue_team_score, red_team_score = MatchTemplates.get_escort_score(frame, point_crop, score_templates)
-            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"]), distance_templates)
-            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"]), distance_templates)
+            blue_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["blue_distance"], 0), distance_templates)
+            red_capture_distance = MatchTemplates.read_stat(crop(frame, distance_crop["red_distance"], 0), distance_templates)
 
         # Separate whole metres from decimal
         if blue_capture_distance != "":
@@ -343,7 +347,7 @@ def get_team_scores(frame: np.ndarray, colour_frame:np.ndarray, current_time: in
             #print(0.0, 0.0)
             return 0, 0, 0.0, 0.0, in_control, current_point, event_log, current_time
         for i, value in enumerate(crop_positions.values()):
-            cropped_img = crop(frame, value)
+            cropped_img = crop(frame, value, 0)
             if i < 2:
                 _, binary = cv2.threshold(cropped_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                 number = MatchTemplates.read_number(image=binary, templates=score_templates)
@@ -444,7 +448,7 @@ def end_score(current_time: int, game_mode: str, blue_points_captured: int, red_
 
 def get_player_data(image: np.ndarray, current_time: int, player_acc: HeroAccumulator.HeroAccumulator,
                     current_layout: CropPositions.PerkLayout, hero_templates: list[dict[str, np.ndarray]],
-                    stat_templates, iteration, final, event_log, minor_perk_templates, major_perk_templates):
+                    stat_templates, iteration, final, event_log, minor_perk_templates, major_perk_templates, y_offset):
     """
     Extracts and updates statistics for a single player from the current video frame.
     Runs for every player on every captured frame.
@@ -452,38 +456,37 @@ def get_player_data(image: np.ndarray, current_time: int, player_acc: HeroAccumu
     # Match hero portrait to templates to find currently selected hero
     # If not certain, revert to current hero as found in HeroAccumulator
     hero_name, hero_score = MatchTemplates.get_hero_name(
-        img_crop=crop(image=image, box=current_layout.hero_crop[iteration]),
+        img_crop=crop(image=image, box=current_layout.hero_crop[iteration], y_offset=y_offset),
         templates=hero_templates)
     if hero_score < 0.5:
         hero_name = player_acc.get_current_hero()
 
     # Checking ultimate status by looking at specific pixel colour
     ult_charged = False
-    if image[current_layout.ult_check[iteration][1],current_layout.ult_check[iteration][0]] > 250:
+    if image[current_layout.ult_check[iteration][1] + y_offset,current_layout.ult_check[iteration][0]] > 250:
         ult_charged = True
 
     # Handling perk selection, with current_hero to reduce the number of templates to check
     minor_perk = None
     major_perk = None
     if current_layout.minor_perk_crop:
-        maybe_minor_perk, minor_perk_score = MatchTemplates.get_perk(crop(image=image, box=current_layout.minor_perk_crop[iteration]), minor_perk_templates[hero_name])
+        maybe_minor_perk, minor_perk_score = MatchTemplates.get_perk(crop(image=image, box=current_layout.minor_perk_crop[iteration], y_offset=y_offset), minor_perk_templates[hero_name])
         if minor_perk_score > 0.5:
             minor_perk = maybe_minor_perk
     if current_layout.major_perk_crop:
-        maybe_major_perk, major_perk_score = MatchTemplates.get_perk(crop(image=image, box=current_layout.major_perk_crop[iteration]), major_perk_templates[hero_name])
+        maybe_major_perk, major_perk_score = MatchTemplates.get_perk(crop(image=image, box=current_layout.major_perk_crop[iteration], y_offset=y_offset), major_perk_templates[hero_name])
         if major_perk_score > 0.5:
             major_perk = maybe_major_perk
 
     # Extracting numbers from the scoreboard
     numbers = {
         "eliminations": str(
-            MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.eliminations_crop[iteration]), templates=stat_templates)),
-        "assists": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.assists_crop[iteration]), templates=stat_templates)),
-        "deaths": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.deaths_crop[iteration]), templates=stat_templates)),
-        "damage": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.damage_crop[iteration]), templates=stat_templates)),
-        "healing": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.healing_crop[iteration]), templates=stat_templates)),
-        "mitigated": str(
-            MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.mitigated_crop[iteration]), templates=stat_templates)),
+            MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.eliminations_crop[iteration], y_offset=y_offset), templates=stat_templates)),
+        "assists": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.assists_crop[iteration], y_offset=y_offset), templates=stat_templates)),
+        "deaths": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.deaths_crop[iteration], y_offset=y_offset), templates=stat_templates)),
+        "damage": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.damage_crop[iteration], y_offset=y_offset), templates=stat_templates)),
+        "healing": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.healing_crop[iteration], y_offset=y_offset), templates=stat_templates)),
+        "mitigated": str(MatchTemplates.read_stat(img_crop=crop(image=image, box=current_layout.mitigated_crop[iteration], y_offset=y_offset), templates=stat_templates)),
     }
 
     # Fallback to previous values if matching returns empty results
@@ -553,13 +556,14 @@ def get_replays():
             "X-API-Key": API_KEY,
         },
         params=[
-            ("where[replayCode][exists]", "true"),
-            ("where[match.version][equals]", "2.25.0.0.154088"),
-            ("where[replayParsed][exists]", "false"),
-            ("where[blueTeam][exists]", "true"),
-            ("where[redTeam][exists]", "true"),
-            ("sort", "match.startDate,mapIndex"),
-            ("limit", "1"),
+            ("where[replayCode][equals]", "4AC0NE")
+            #("where[replayCode][exists]", "true"),
+            #("where[match.version][equals]", "2.25.0.0.154088"),
+            #("where[replayParsed][exists]", "false"),
+            #("where[blueTeam][exists]", "true"),
+            #("where[redTeam][exists]", "true"),
+            #("sort", "match.startDate,mapIndex"),
+            #("limit", "1"),
         ],
     )
 
@@ -687,21 +691,25 @@ def run_reader(state=None):
         expected_scores = (replay[5], replay[6])
 
         # Automated UI interaction loop to import replay codes and handle errors
-        pyautogui.moveTo(1750, 335)
+        x, y = scale_xy(1750, 335, True)
+        pyautogui.moveTo(x, y)
         pyautogui.leftClick()
         time.sleep(1)
         pyautogui.write(replay[2])
-        pyautogui.moveTo(1040, 635)
+        x, y = scale_xy(1040, 635)
+        pyautogui.moveTo(x, y)
         pyautogui.leftClick()
         time.sleep(3)
         replay_check = np.array(pyautogui.screenshot())
         # Check for errors when importing replay
-        if replay_check[460, 1200][0] > 100:
-            pyautogui.moveTo(960, 615)
+        x, y = scale_xy(1200, 460)
+        if replay_check[y, x][0] > 100:
+            x, y = scale_xy(960, 615)
+            pyautogui.moveTo(x, y)
             pyautogui.leftClick()
             # TODO Assign error to map in DB
             continue
-        x = requests.patch(
+        r = requests.patch(
             url=f"https://owtv.gg/api/match-map/{replay[1]}",
             headers={
                 "X-API-Key": API_KEY,
@@ -709,8 +717,9 @@ def run_reader(state=None):
             json={"replayParsed": "in-progress"}
 
         )
-        print(x)
-        pyautogui.moveTo(1025, 624)
+        print(r)
+        x, y = scale_xy(1025, 624)
+        pyautogui.moveTo(x, y)
         pyautogui.leftClick()
         print(f"Going in! {replay[2]}")
         if state is not None:
@@ -761,27 +770,35 @@ def run_reader(state=None):
         if state is not None:
             state.status_changed.emit("Reading scoreboard...")
 
+        w, h, aspect_ratio = get_resolution()
+        y_offset = 0
+        if aspect_ratio == "16:10":
+            y_offset = 60
+
         while game_running and not state.stop_event.is_set():
             game_frame = camera.get_latest_frame()
             height, width = game_frame.shape[:2]
-            if width != 1920 and height != 1080:
+            if (aspect_ratio == "16:9") and (width != 1920 and height != 1080):
                 game_frame = cv2.resize(game_frame, (1920, 1080), interpolation=cv2.INTER_AREA)
+            if (aspect_ratio == "16:10") and (width != 1920 and height != 1200):
+                game_frame = cv2.resize(game_frame, (1920, 1200), interpolation=cv2.INTER_AREA)
 
             # Open scoreboard and wait for it to render fully before taking screenshot
             pyautogui.keyDown('tab')
             time.sleep(0.05)
             scoreboard_frame = camera.get_latest_frame()
             height, width = scoreboard_frame.shape[:2]
-            if width != 1920 and height != 1080:
+            if (aspect_ratio == "16:9") and (width != 1920 and height != 1080):
                 scoreboard_frame = cv2.resize(scoreboard_frame, (1920, 1080), interpolation=cv2.INTER_AREA)
+            if (aspect_ratio == "16:10") and (width != 1920 and height != 1200):
+                scoreboard_frame = cv2.resize(scoreboard_frame, (1920, 1200), interpolation=cv2.INTER_AREA)
             pyautogui.keyUp('tab')
-
             # FIRST FRAME INITIALIZATION: Resolve player names and look up database identity matches
             if previous_scoreboard_frame is None:
                 gray_scoreboard = cv2.cvtColor(scoreboard_frame, cv2.COLOR_RGB2GRAY)
                 for i in range(10):
                     team_players = blue_players if i < 5 else red_players
-                    name_img = crop(image=gray_scoreboard, box=CropPositions.layouts["none"].name_crop[i])
+                    name_img = crop(image=gray_scoreboard, box=CropPositions.layouts["none"].name_crop[i], y_offset=y_offset)
                     player_id, player_name = ReadText.read_name(img_crop=name_img, players=team_players, reader=reader)
                     player_accs[i].set_player_id(player_id)
                     player_accs[i].set_player_name(player_name)
@@ -803,7 +820,7 @@ def run_reader(state=None):
                     break
 
             # END-GAME RECOGNITION: Detect completely dark pixels where we would expect to see light, indicating end of game
-            if (scoreboard_frame[170, 810] < 30).all():
+            if (scoreboard_frame[170 + y_offset, 810] < 30).all():
                 (blue_team_points_captured,
                 red_team_points_captured,
                 blue_team_capture_distance,
@@ -826,7 +843,7 @@ def run_reader(state=None):
                     stats, event_log = get_player_data(image = previous_scoreboard_frame, current_time=previous_time, player_acc=acc,
                                                 current_layout=previous_layout,hero_templates=hero_templates[team][role],
                                                 stat_templates=stats_templates, iteration=j, final=True, event_log=event_log,
-                                                minor_perk_templates=minor_perk_templates, major_perk_templates=major_perk_templates)
+                                                minor_perk_templates=minor_perk_templates, major_perk_templates=major_perk_templates, y_offset=y_offset)
                     """database_interface.add_player_map_stats(map_id=replay[1], match_id=replay[0], player_id=acc.get_player_id(),
                                                                 kills=int(stats[5]), deaths=int(stats[7]), assists=int(stats[6]),
                                                                 damage=int(stats[8]), healing=int(stats[9]), mitigated=int(stats[10]))"""
@@ -845,7 +862,7 @@ def run_reader(state=None):
             gray_scoreboard = cv2.cvtColor(scoreboard_frame, cv2.COLOR_RGB2GRAY)
             # TIME PARSING: Use PyTorch model to track the match clock
             timer = time_model_training.predict(model=model, image_path=crop(image=scoreboard_frame,
-                                                                                 box=CropPositions.time_crop))
+                                                                                 box=CropPositions.time_crop, y_offset=0))
             mins = timer[0:2]
             secs = timer[2:4]
             if mins == "" or secs == "": # The model cannot resolve a time
@@ -865,7 +882,6 @@ def run_reader(state=None):
                 match_time = (int(mins) * 60) + int(secs) # Convert time to seconds
                 if state is not None:
                     state.time_changed.emit(f"{mins}:{secs}")
-
             # Get the number of points captured by each team
             (blue_team_points_captured,
             red_team_points_captured,
@@ -877,7 +893,6 @@ def run_reader(state=None):
                                                blue_distance=blue_team_capture_distance,
                                                red_distance=red_team_capture_distance, in_control=in_control, current_point=current_point, event_log=event_log,
                                                previous_capture_time=previous_capture_time, score_templates=score_templates, distance_templates=distance_templates, point_templetes=point_templates, team_names=team_names)
-
             # LAYOUT DETECTION: Check perk positions to select the correct crops to use
             if check_white_pixels(scoreboard_frame, CropPositions.major_perk_positions):
                 layout = CropPositions.layouts["major"]
@@ -891,7 +906,7 @@ def run_reader(state=None):
                 team = get_team(numb=i)
                 # Resolve role on initial scoreboard frame
                 if acc.get_role() == "none":
-                    role, score = MatchTemplates.get_role(crop(image=gray_scoreboard, box=layout.role_check[i]),
+                    role, score = MatchTemplates.get_role(crop(image=gray_scoreboard, box=layout.role_check[i], y_offset=y_offset),
                                                               templates=role_templates[team])
                     if score > 0.5:
                         acc.set_role(role)
@@ -902,10 +917,11 @@ def run_reader(state=None):
                     stats, event_log = get_player_data(image=gray_scoreboard, current_time=match_time, player_acc=acc,
                                                 current_layout=layout, hero_templates=hero_templates[team][role],
                                                 stat_templates=stats_templates, iteration=i, final=False, event_log=event_log,
-                                                minor_perk_templates=minor_perk_templates, major_perk_templates=major_perk_templates)
+                                                minor_perk_templates=minor_perk_templates, major_perk_templates=major_perk_templates, y_offset=y_offset)
                 else:
                     stats = [None, acc.get_player_id(), False, None, None, 0, 0, 0, 0, 0, 0]
                 # Collating data to insert into CSV
+                print(stats)
                 temp_data.append(stats)
                 all_data.append([match_time] + stats)
                 counter += 1
@@ -972,7 +988,7 @@ def run_reader(state=None):
                                         },
                                         json = player_map_stat_hero,
                                     )
-                                    print(x.text)
+                                    print(player_map_stat_hero)
 
             x = requests.patch(
                 url = f"https://owtv.gg/api/match-map/{replay[1]}",
@@ -982,7 +998,7 @@ def run_reader(state=None):
                 json = {"replayParsed": "complete", "eventLog": {"events": [e for e in parsed_event_log]}}
 
             )
-            print(x)
+            #print(x.content)
 
             # conn.commit()
             if state is not None:

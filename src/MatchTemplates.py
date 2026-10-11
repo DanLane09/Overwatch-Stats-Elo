@@ -15,11 +15,12 @@ def preprocess_image(crop: np.ndarray) -> np.ndarray:
     _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU) # Turns image black and white
     return binary
 
-def crop(image: np.ndarray, box: list[int]) -> np.ndarray:
+def crop(image: np.ndarray, box: list[int], y_offset: int) -> np.ndarray:
     """
     Extracts a region from an image using [x_start, x_end, y_start, y_end] box limits.
     """
     x1, x2, y1, y2 = box
+    y1, y2 = y1 + y_offset, y2 + y_offset
     return image[y1:y2, x1:x2]
 
 def ssim_match(crop: np.ndarray, templates: List[Dict[str, Any]]) -> Tuple[Optional[str], float]:
@@ -50,7 +51,7 @@ def get_perk(img_crop: np.ndarray, templates: List[Dict[str, Any]]) -> Tuple[Opt
 def get_escort_score(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]]) -> List[Any]:
     scores = []
     for value in crop_positions.values():
-        cropped_img = crop(img, value)
+        cropped_img = crop(img, value, 0)
         _, thresh = cv2.threshold(cropped_img, 180, 255, cv2.THRESH_BINARY)
         digit = read_number(image=thresh, templates=templates, threshold=0.7)
         if digit != "":
@@ -62,7 +63,7 @@ def get_escort_score(img: np.ndarray, crop_positions: Dict[str, List[int]], temp
 def get_control_score(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]], targets: List[List[int]]) -> List[Any]:
     scores = []
     for value, target in zip(crop_positions.values(), targets):
-        cropped_img = crop(img, value)
+        cropped_img = crop(img, value, 0)
         target_colour = np.array(target, dtype=np.uint8)
         mask = np.all(cropped_img == target_colour, axis=2)
         output = np.zeros_like(cropped_img)
@@ -78,7 +79,7 @@ def get_control_score(img: np.ndarray, crop_positions: Dict[str, List[int]], tem
 def get_control_percentage(img: np.ndarray, crop_positions: Dict[str, List[int]], templates: List[Dict[str, Any]], targets: List[List[int]]) -> List[int]:
     percentages = []
     for value, target in zip(crop_positions.values(), targets):
-        cropped_img = crop(img, value)
+        cropped_img = crop(img, value, 0)
         target_colour = np.array(target, dtype=np.uint8)
         mask = np.all(cropped_img == target_colour, axis=2)
         output = np.zeros_like(cropped_img)
@@ -89,7 +90,7 @@ def get_control_percentage(img: np.ndarray, crop_positions: Dict[str, List[int]]
     return percentages
 
 def get_control_point(img: np.ndarray, crop_positions: List[int], templates: List[Dict[str, Any]]) -> str|None:
-    cropped_img = crop(img, crop_positions)
+    cropped_img = crop(img, crop_positions, 0)
     gray_img = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
     img = preprocess_image(gray_img)
     point, score = ssim_match(img, templates)

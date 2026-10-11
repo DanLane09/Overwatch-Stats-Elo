@@ -23,3 +23,4 @@ remotezip==0.12.6
 requests==2.34.2
 keyboard==0.13.5
 jellyfish==1.2.1
+windows-capture==2.0.1

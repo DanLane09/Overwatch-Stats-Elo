@@ -170,6 +170,13 @@ class MainWindow(QMainWindow):
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
 
+        # Settings
+        self.settings_button = QPushButton("⚙")
+        self.settings_button.setObjectName("settingsButton")
+        self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_button.setFixedSize(32, 32)
+        header_layout.addWidget(self.settings_button, alignment=Qt.AlignmentFlag.AlignTop)
+
         # Status indicator
         self.header_status = QLabel("● READY")
         self.header_status.setObjectName("headerStatus")
@@ -279,6 +286,7 @@ class MainWindow(QMainWindow):
         self.state.status_changed.connect(self.update_status)
         self.state.running_changed.connect(self.update_running)
         self.state.error_occurred.connect(self.show_error)
+        self.settings_button.clicked.connect(self.open_settings)
 
     # UI updates
     @Slot(str, str)
@@ -294,9 +302,13 @@ class MainWindow(QMainWindow):
     def update_status(self, status):
         self.status_label.setText(status)
 
+    def open_settings(self):
+        SettingsDialog(self).exec()
+
     @Slot(bool)
     def update_running(self, running):
         self.run_button.setEnabled(not running)
+        self.settings_button.setEnabled(not running)
         if running:
             self.run_button.setText("PROCESSING: TO STOP PRESS 'ctrl+esc'")
             self.header_status.setText("● PROCESSING")
@@ -594,8 +606,84 @@ class MainWindow(QMainWindow):
             background: #1d292b;
             color: #596568;
         }
+        
+        QDialog { background: #0b0e10; }
+
+        QComboBox {
+            background: #15181c;
+            color: #e8eeee;
+            border: 1px solid #252a2f;
+            border-radius: 4px;
+            padding: 7px 10px;
+            font-family: "Segoe UI";
+        }
+        QComboBox QAbstractItemView {
+            background: #15181c;
+            color: #e8eeee;
+            selection-background-color: #102d30;
+            selection-color: #0cf2f2;
+        }
+        
+        QPushButton#settingsButton {
+            background: transparent;
+            color: #697477;
+            border: 1px solid #252a2f;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        QPushButton#settingsButton:hover { color: #0cf2f2; border-color: #0b5c61; }
+        QPushButton#settingsButton:disabled { color: #2f373a; }
+        
+        QDialogButtonBox QPushButton {
+            background: #15181c;
+            color: #e8eeee;
+            border: 1px solid #252a2f;
+            border-radius: 4px;
+            padding: 7px 18px;
+            font-family: "Segoe UI";
+        }
+        QDialogButtonBox QPushButton:hover { border-color: #0cf2f2; }
 
         """)
+
+from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox
+import settings
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.setModal(True)
+        self.setMinimumWidth(380)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(10)
+
+        title = QLabel("GAME RESOLUTION")
+        title.setObjectName("sectionTitle")
+
+        self.combo = QComboBox()
+        self.combo.addItems(settings.RESOLUTIONS)
+        self.combo.setCurrentText(settings.get("resolution"))
+
+        hint = QLabel("Set this to the resolution of the monitor that Overwatch is running on.")
+        hint.setObjectName("instructions")
+        hint.setWordWrap(True)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.save)
+        buttons.rejected.connect(self.reject)
+
+        layout.addWidget(title)
+        layout.addWidget(self.combo)
+        layout.addWidget(hint)
+        layout.addSpacing(8)
+        layout.addWidget(buttons)
+
+    def save(self):
+        settings.set("resolution", self.combo.currentText())
+        self.accept()
 
 # Application
 def main():
