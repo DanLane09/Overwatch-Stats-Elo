@@ -56,6 +56,6 @@ def scale_xy(x, y, import_botton=False):
     """Convert a coordinate measured at BASE_RESOLUTION to the selected resolution."""
     base_resolution = [1920, 1080]
     w, h, aspect_ratio = get_resolution()
-    if import_botton and (aspect_ratio == "16:10"):
+    if (not import_botton) and (aspect_ratio == "16:10"):
         base_resolution = [1920, 1200]
     return round(x * w / base_resolution[0]), round(y * h / base_resolution[1])

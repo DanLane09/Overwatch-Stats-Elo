@@ -215,10 +215,15 @@ def _resolve_new_charge(t, current_hero_id, filtered_hero_id, min_charge_time,
     """Evaluate and (if valid) log a charge-completion event. Returns charge_valid."""
     charge_time = t - start_charging_time
 
-    if current_hero_id == filtered_hero_id:
+    """if current_hero_id == filtered_hero_id:
         charge_valid = charge_time >= min_charge_time
     else:
+        charge_valid = True"""
+
+    if charge_time >= 16:
         charge_valid = True
+    else:
+        charge_valid = False
 
     if charge_valid:
         player_charge_events.append((

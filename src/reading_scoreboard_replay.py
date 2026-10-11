@@ -711,7 +711,7 @@ def run_reader(state=None):
             headers={"X-API-Key": API_KEY,},
             json={"replayParsed": "in-progress"},
         )
-        print(response)
+        #print(response)
         x, y = scale_xy(1025, 624)
         pyautogui.moveTo(x, y)
         pyautogui.leftClick()
@@ -808,7 +808,7 @@ def run_reader(state=None):
                         headers={"X-API-Key": API_KEY,},
                         json={"replayParsed": "error-not-enough-players"}
                     )
-                    print(x)
+                    #print(x)
                     break
 
             # END-GAME RECOGNITION: Detect completely dark pixels where we would expect to see light, indicating end of game
@@ -913,7 +913,6 @@ def run_reader(state=None):
                 else:
                     stats = [None, acc.get_player_id(), False, None, None, 0, 0, 0, 0, 0, 0]
                 # Collating data to insert into CSV
-                print(stats)
                 temp_data.append(stats)
                 all_data.append([match_time] + stats)
                 counter += 1
@@ -980,7 +979,7 @@ def run_reader(state=None):
                                         headers = {"X-API-Key": API_KEY,},
                                         json = player_map_stat_hero,
                                     )
-                                    print(response)
+                                    #print(response)
 
             x = api_request(
                 method="patch",
