@@ -2,14 +2,11 @@ import json
 import os
 
 BASE_RESOLUTION = (1920, 1080)   # the resolution your current (x, y) values were measured at
-RESOLUTIONS = RESOLUTIONS = [
-    # 16:9
-    "1920x1080", "2048x1152", "2560x1440", "2880x1620",
-    "3200x1800", "3840x2160", "5120x2880", "7680x4320",
-    # 16:10
-    "1920x1200", "2560x1600", "2880x1800", "3072x1920",
-    "3200x2000", "3840x2400",
-]
+
+RESOLUTIONS_16_9 = ["1920x1080", "2048x1152", "2560x1440", "2880x1620", "3200x1800", "3840x2160", "5120x2880", "7680x4320",]
+RESOLUTIONS_16_10 = ["1920x1200", "2560x1600", "2880x1800", "3072x1920", "3200x2000", "3840x2400",]
+RESOLUTIONS = RESOLUTIONS_16_9 + RESOLUTIONS_16_10
+
 DEFAULTS = {"resolution": "1920x1080"}
 
 SETTINGS_DIR = os.path.join(os.environ["LOCALAPPDATA"], "OverwatchStatsElo")
@@ -49,15 +46,16 @@ def set(key, value):
     _save()
 
 def get_resolution():
-    w, h = get("resolution").split("x")
-    if [w, h] in [["1920x1080"], ["2048x1152"], ["2560x1440"], ["2880x1620"], ["3200x1800"], ["3840x2160"], ["5120x2880"], ["7680x4320"]]:
-        return int(w), int(h), "16:9"
-    return int(w), int(h), "16:10"
+    res = get("resolution")
+    w, h = map(int, res.split("x"))
+    if res in RESOLUTIONS_16_9:
+        return w, h, "16:9"
+    return w, h, "16:10"
 
 def scale_xy(x, y, import_botton=False):
     """Convert a coordinate measured at BASE_RESOLUTION to the selected resolution."""
-    base_resolution = (1920, 1080)
+    base_resolution = [1920, 1080]
     w, h, aspect_ratio = get_resolution()
-    if import_botton and aspect_ratio == "16:10":
-        base_resolution = (1920, 1200)
+    if import_botton and (aspect_ratio == "16:10"):
+        base_resolution = [1920, 1200]
     return round(x * w / base_resolution[0]), round(y * h / base_resolution[1])
