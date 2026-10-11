@@ -556,14 +556,13 @@ def get_replays():
             "X-API-Key": API_KEY,
         },
         params=[
-            ("where[replayCode][equals]", "4AC0NE")
-            #("where[replayCode][exists]", "true"),
-            #("where[match.version][equals]", "2.25.0.0.154088"),
-            #("where[replayParsed][exists]", "false"),
-            #("where[blueTeam][exists]", "true"),
-            #("where[redTeam][exists]", "true"),
-            #("sort", "match.startDate,mapIndex"),
-            #("limit", "1"),
+            ("where[replayCode][exists]", "true"),
+            ("where[match.version][equals]", "2.25.0.0.154088"),
+            ("where[replayParsed][exists]", "false"),
+            ("where[blueTeam][exists]", "true"),
+            ("where[redTeam][exists]", "true"),
+            ("sort", "match.startDate,mapIndex"),
+            ("limit", "1"),
         ],
     )
 
