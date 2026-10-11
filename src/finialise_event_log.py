@@ -7,6 +7,7 @@ from pathlib import Path
 from collections import defaultdict
 import HeroDisplayNames
 import requests
+from request import api_request
 from config import API_KEY
 
 
@@ -330,7 +331,12 @@ def post_fights(match_map, api_url, df, start_times, end_times, winning_teams,
     results = []
     for payload in payloads:
         try:
-            response = requests.post(api_url, json=payload, headers = {"X-API-Key": API_KEY}, timeout=timeout)
+            response = api_request(
+                method="post",
+                url=api_url,
+                headers = {"X-API-Key": API_KEY},
+                json=payload
+            )
             response.raise_for_status()
             results.append((payload["fightNumber"], response.status_code, None))
         except requests.RequestException as e:

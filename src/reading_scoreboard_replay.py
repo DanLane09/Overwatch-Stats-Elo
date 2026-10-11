@@ -13,7 +13,6 @@ pyautogui.FAILSAFE = True
 import time
 import numpy as np
 import csv
-import database_interface
 import CropPositions
 import finialise_event_log
 import HeroAccumulator
@@ -26,6 +25,7 @@ import ReadText
 import torch
 from config import API_KEY, resource_path, output_path
 import threading
+from request import api_request
 
 # Initialize hardware-accelerated desktop capture and deep-learning OCR dependencies
 #camera = bettercam.create(output_color="RGB")
@@ -67,11 +67,10 @@ def get_team(numb: int) -> str:
 def get_team_players(team_id: int) -> dict[int, str]:
     players = {}
     url = f"https://owtv.gg/api/team-membership"
-    response = requests.get(
+    response = api_request(
+        method="get",
         url=url,
-        headers={
-            "X-API-Key": API_KEY,
-        },
+        headers={"X-API-Key": API_KEY,},
         params=[
             ("where[team.id][equals]", team_id),
             ("where[departedDate][exists]", "false"),
@@ -550,11 +549,10 @@ def get_replays():
     """
     url = f"https://owtv.gg/api/match-map"
 
-    response = requests.get(
+    response = api_request(
+        method="GET",
         url=url,
-        headers={
-            "X-API-Key": API_KEY,
-        },
+        headers={"X-API-Key": API_KEY,},
         params=[
             ("where[replayCode][exists]", "true"),
             ("where[match.version][equals]", "2.25.0.0.154088"),
@@ -630,11 +628,10 @@ def run_reader(state=None):
 
     # Getting database name and ID for each hero, formatting the name to match the program
     url = f"https://owtv.gg/api/game-hero"
-    response = requests.get(
+    response = api_request(
+        method="GET",
         url=url,
-        headers={
-            "X-API-Key": API_KEY,
-        },
+        headers={"X-API-Key": API_KEY,},
         params=[
             ("limit", "100"),
         ],
@@ -708,15 +705,13 @@ def run_reader(state=None):
             pyautogui.leftClick()
             # TODO Assign error to map in DB
             continue
-        r = requests.patch(
+        response = api_request(
+            method="patch",
             url=f"https://owtv.gg/api/match-map/{replay[1]}",
-            headers={
-                "X-API-Key": API_KEY,
-            },
-            json={"replayParsed": "in-progress"}
-
+            headers={"X-API-Key": API_KEY,},
+            json={"replayParsed": "in-progress"},
         )
-        print(r)
+        print(response)
         x, y = scale_xy(1025, 624)
         pyautogui.moveTo(x, y)
         pyautogui.leftClick()
@@ -807,13 +802,11 @@ def run_reader(state=None):
                 if len(set(player_ids)) != 10:
                     print("LESS THAN 10 PLAYERS")
                     parse_error = True
-                    x = requests.patch(
+                    x = api_request(
+                        method="patch",
                         url=f"https://owtv.gg/api/match-map/{replay[1]}",
-                        headers={
-                            "X-API-Key": API_KEY,
-                        },
+                        headers={"X-API-Key": API_KEY,},
                         json={"replayParsed": "error-not-enough-players"}
-
                     )
                     print(x)
                     break
@@ -939,6 +932,7 @@ def run_reader(state=None):
             pyautogui.leftClick()
 
         if not state.stop_event.is_set() and not parse_error:
+            state.status_changed.emit("Uploading map data: DO NOT STOP THE PROGRAM NOW.")
             # Finishing matches in the database
             # Selecting winning team, updating elo, etc.
             """if replay[0] != next_replay[0]:
@@ -980,22 +974,19 @@ def run_reader(state=None):
                                                             "totalDmg": stats["damage"], "totalHeal": stats["healing"], "totalMit": stats["mitigated"],
                                                             "fightsTotal": log["fight_starts"], "totalUltsUsed": log["ults_used"], "totalUltChargeTime": log["total_charge_time"]}
 
-                                    x = requests.post(
+                                    response = api_request(
+                                        method="post",
                                         url = player_hero_map_stats_url,
-                                        headers = {
-                                            "X-API-Key": API_KEY,
-                                        },
+                                        headers = {"X-API-Key": API_KEY,},
                                         json = player_map_stat_hero,
                                     )
-                                    print(player_map_stat_hero)
+                                    print(response)
 
-            x = requests.patch(
+            x = api_request(
+                method="patch",
                 url = f"https://owtv.gg/api/match-map/{replay[1]}",
-                headers={
-                    "X-API-Key": API_KEY,
-                },
+                headers={"X-API-Key": API_KEY,},
                 json = {"replayParsed": "complete", "eventLog": {"events": [e for e in parsed_event_log]}}
-
             )
             #print(x.content)
 
