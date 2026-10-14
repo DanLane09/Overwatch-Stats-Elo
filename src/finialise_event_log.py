@@ -278,7 +278,7 @@ def summarize_ults(charge_events, usage_events, fight_start_counts):
     ]
 
 def build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
-                         blue_team_id, red_team_id, ult_used, event_log_file):
+                         blue_team_id, red_team_id, ult_used, event_log_file, team1_id, team2_id):
     """Build one payload per fight. team1 = blue/left team, team2 = red/right team."""
     player_team = df.drop_duplicates("player_id").set_index("player_id")["team_id"].to_dict()
 
@@ -317,10 +317,10 @@ def build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
             "fightLength": end - start,
             "winningTeam": int(winner),
             "losingTeam": int(loser),
-            "team1Kills": team_sum(red_team_id, "deaths_delta"),
-            "team2Kills": team_sum(blue_team_id, "deaths_delta"),
-            "team1Deaths": team_sum(blue_team_id, "deaths_delta"),
-            "team2Deaths": team_sum(red_team_id, "deaths_delta"),
+            "team1Kills": team_sum(team2_id, "deaths_delta"),
+            "team2Kills": team_sum(team1_id, "deaths_delta"),
+            "team1Deaths": team_sum(team1_id, "deaths_delta"),
+            "team2Deaths": team_sum(team2_id, "deaths_delta"),
             "team1Ults": team1_ults,
             "team2Ults": team2_ults,
             "eventLog": {"events": [e for e in parsed_events if start <= e["time"] <= end]},
@@ -329,10 +329,10 @@ def build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
 
 
 def post_fights(match_map, api_url, df, start_times, end_times, winning_teams,
-                blue_team_id, red_team_id, ult_used, event_log_file,
+                blue_team_id, red_team_id, ult_used, event_log_file, team1_id, team2_id,
                 headers=None, timeout=10):
     payloads, event_log = build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
-                                    blue_team_id, red_team_id, ult_used, event_log_file)
+                                    blue_team_id, red_team_id, ult_used, event_log_file, team1_id, team2_id)
     results = []
     for payload in payloads:
         try:
@@ -541,7 +541,7 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id):
+def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id, team1_id, team2_id):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
@@ -605,7 +605,7 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
 
     results, event_log = post_fights(match_map=match_map_id, api_url="https://owtv.gg/api/map-fight", df=df, start_times=start_times,
                 end_times=end_times, winning_teams=winning_teams,
-                blue_team_id=blue_team_id, red_team_id=red_team_id, ult_used=ult_used, event_log_file=event_log_path)
+                blue_team_id=blue_team_id, red_team_id=red_team_id, ult_used=ult_used, event_log_file=event_log_path, team1_id=team1_id, team2_id=team2_id)
 
     return ult_summary, event_log
 

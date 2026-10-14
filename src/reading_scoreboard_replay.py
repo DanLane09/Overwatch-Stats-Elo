@@ -587,7 +587,8 @@ def get_replays():
             red_score = data["team2Score"]
 
     replay = [data["match"]["id"], data["id"], data["replayCode"], data["blueTeam"]["id"], data["redTeam"]["id"], blue_score, red_score,
-                  data["map"]["mode"], data["map"]["name"], data["blueTeam"]["name"], data["redTeam"]["name"], data["playerStats"]["docs"]]
+                  data["map"]["mode"], data["map"]["name"], data["blueTeam"]["name"], data["redTeam"]["name"], data["playerStats"]["docs"],
+              data["match"]["team1"]["id"], data["match"]["team2"]["id"]]
 
     return replay
 
@@ -957,7 +958,7 @@ def run_reader(state=None):
                 player_name = acc.get_player_name()
                 players[player_id] = player_name
 
-            player_hero_summary, parsed_event_log = finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, left_team_id=replay[3], right_team_id=replay[4], map_type=replay[7], players=players, heroes=heroes, match_map_id=replay[1])
+            player_hero_summary, parsed_event_log = finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, left_team_id=replay[3], right_team_id=replay[4], map_type=replay[7], players=players, heroes=heroes, match_map_id=replay[1], team1_id=replay[12], team2_id=replay[13])
             player_map_stats = replay[11]
 
             player_hero_map_stats_url = "https://owtv.gg/api/player-map-stats-hero"
