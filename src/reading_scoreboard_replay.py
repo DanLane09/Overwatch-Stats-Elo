@@ -556,7 +556,8 @@ def get_replays():
         params=[
             ("where[replayCode][exists]", "true"),
             ("where[match.version][equals]", "2.25.0.0.154088"),
-            ("where[replayParsed][exists]", "false"),
+            ("where[or][0][replayParsed][exists]", "false"),
+            ("where[or][1][replayParsed][equals]", "retry"),
             ("where[blueTeam][exists]", "true"),
             ("where[redTeam][exists]", "true"),
             ("sort", "match.startDate,mapIndex"),

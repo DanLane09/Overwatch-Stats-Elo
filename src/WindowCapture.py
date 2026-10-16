@@ -96,30 +96,38 @@ class WindowCapture:
             self._last_seq = 0
             self._closed = False
 
-        kwargs = {
-            "cursor_capture": self._cursor_capture,
-            "draw_border": self._draw_border,
+        target = (
+            {"window_name": self._window_name}
+            if self._window_name is not None
+            else {"monitor_index": self._monitor_index}
+        )
+        wanted = {
+            k: v
+            for k, v in (("cursor_capture", self._cursor_capture),
+                         ("draw_border", self._draw_border))
+            if v is not None
         }
-        if self._window_name is not None:
-            kwargs["window_name"] = self._window_name
-        else:
-            kwargs["monitor_index"] = self._monitor_index
 
-        capture = WindowsCapture(**kwargs)
+        last_err = None
+        for opts in ([wanted, {}] if wanted else [{}]):
+            try:
+                capture = WindowsCapture(**opts, **target)
 
-        @capture.event
-        def on_frame_arrived(frame: Frame, ctrl: InternalCaptureControl):
-            self._on_frame(frame)
+                @capture.event
+                def on_frame_arrived(frame: Frame, ctrl: InternalCaptureControl):
+                    self._on_frame(frame)
 
-        @capture.event
-        def on_closed():
-            with self._cond:
-                self._closed = True
-                self._cond.notify_all()
+                @capture.event
+                def on_closed():
+                    with self._cond:
+                        self._closed = True
+                        self._cond.notify_all()
 
-        # A new WindowsCapture is created on every start(), so start/stop can be
-        # repeated once per map exactly like the bettercam camera.
-        self._control = capture.start_free_threaded()
+                self._control = capture.start_free_threaded()
+                return
+            except Exception as e:
+                last_err = e
+        raise last_err
 
     def stop(self):
         control, self._control = self._control, None
