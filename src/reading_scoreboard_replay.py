@@ -555,7 +555,7 @@ def get_replays():
         headers={"X-API-Key": API_KEY,},
         params=[
             ("where[replayCode][exists]", "true"),
-            ("where[match.version][equals]", "2.25.0.0.154088"),
+            ("where[match.version][equals]", "2.25.0.1.154504"),
             ("where[or][0][replayParsed][exists]", "false"),
             ("where[or][1][replayParsed][equals]", "retry"),
             ("where[blueTeam][exists]", "true"),
@@ -702,10 +702,16 @@ def run_reader(state=None):
         # Check for errors when importing replay
         x, y = scale_xy(1200, 460)
         if replay_check[y, x][0] > 100:
+            # Replay code is wrong, or it already exists in this user's imported codes
             x, y = scale_xy(960, 615)
             pyautogui.moveTo(x, y)
             pyautogui.leftClick()
-            # TODO Assign error to map in DB
+            response = api_request(
+                method="patch",
+                url=f"https://owtv.gg/api/match-map/{replay[1]}",
+                headers={"X-API-Key": API_KEY, },
+                json={"replayParsed": "retry"},
+            )
             continue
         response = api_request(
             method="patch",
@@ -959,7 +965,12 @@ def run_reader(state=None):
                 player_name = acc.get_player_name()
                 players[player_id] = player_name
 
-            player_hero_summary, parsed_event_log = finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path, left_team_name=first_team_name, right_team_name=second_team_name, left_team_id=replay[3], right_team_id=replay[4], map_type=replay[7], players=players, heroes=heroes, match_map_id=replay[1], team1_id=replay[12], team2_id=replay[13])
+            player_hero_summary, parsed_event_log = finialise_event_log.main(csv_path=csv_path, event_log_path=event_log_path,
+                                                                             left_team_name=first_team_name, right_team_name=second_team_name,
+                                                                             left_team_id=replay[3], right_team_id=replay[4],
+                                                                             map_type=replay[7], players=players, heroes=heroes,
+                                                                             match_map_id=replay[1], team1_id=replay[12], team2_id=replay[13],
+                                                                             player_accs=player_accs)
             player_map_stats = replay[11]
 
             player_hero_map_stats_url = "https://owtv.gg/api/player-map-stats-hero"

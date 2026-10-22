@@ -254,17 +254,41 @@ def count_fight_starts(df, start_times):
     return counts
 
 
-def summarize_ults(charge_events, usage_events, fight_start_counts):
+def summarize_ults(charge_events, usage_events, fight_start_counts, player_accs, heroes):
     stats = defaultdict(lambda: {"ults_used": 0, "total_charge_time": 0, "fight_starts": 0})
+    valid_pairs = set()
 
+    for acc in player_accs:
+        player_id = int(acc.get_player_id())
+        for hero_name in acc.finalize():
+            normalized_hero = transform_hero_name(hero_name)
+            hero_id = heroes.get(normalized_hero)
+            if hero_id is None or pd.isna(hero_id):
+                print(
+                    f"Skipping summary pair for player {player_id}: "
+                    f"hero '{hero_name}' is not present in the heroes mapping"
+                )
+                continue
+
+            pair = (player_id, int(hero_id))
+            valid_pairs.add(pair)
+            stats[pair]  # Initialise a zero-valued summary for this pair.
+
+    # Only add event stats for pairs known to the accumulators.
     for _, player_id, hero_id, _, _, charge_time, _ in charge_events:
-        stats[(player_id, hero_id)]["total_charge_time"] += charge_time
+        pair = (int(player_id), int(hero_id))
+        if pair in valid_pairs:
+            stats[pair]["total_charge_time"] += charge_time
 
     for _, player_id, hero_id, _, _, _, _ in usage_events:
-        stats[(player_id, hero_id)]["ults_used"] += 1
+        pair = (int(player_id), int(hero_id))
+        if pair in valid_pairs:
+            stats[pair]["ults_used"] += 1
 
     for (player_id, hero_id), n in fight_start_counts.items():
-        stats[(player_id, hero_id)]["fight_starts"] += n
+        pair = (int(player_id), int(hero_id))
+        if pair in valid_pairs:
+            stats[pair]["fight_starts"] += n
 
     return [
         {
@@ -279,7 +303,7 @@ def summarize_ults(charge_events, usage_events, fight_start_counts):
 
 def build_fight_payloads(match_map, df, start_times, end_times, winning_teams,
                          blue_team_id, red_team_id, ult_used, event_log_file, team1_id, team2_id):
-    """Build one payload per fight. team1 = blue/left team, team2 = red/right team."""
+    """Build one payload per fight. team1 and team2 refer to match team1 and team2"""
     player_team = df.drop_duplicates("player_id").set_index("player_id")["team_id"].to_dict()
 
     with open(event_log_file, "r", encoding="utf-8") as file:
@@ -541,7 +565,7 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id, team1_id, team2_id):
+def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id, team1_id, team2_id, player_accs):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
@@ -591,7 +615,7 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
             log = f"[{ult_used[i][4]}], {players[ult_used[i][1]]} has used {ult_used[i][6]}'s ultimate, Hold time: {ult_used[i][5]}s"
             add_to_log.append(log)
 
-        ult_summary = summarize_ults(charge_events=ult_charged, usage_events=ult_used, fight_start_counts=fight_start_counts)
+        ult_summary = summarize_ults(charge_events=ult_charged, usage_events=ult_used, fight_start_counts=fight_start_counts, player_accs=player_accs, heroes=heroes)
 
         if map_type not in ("escort", "hybrid"):
             rounds = []
