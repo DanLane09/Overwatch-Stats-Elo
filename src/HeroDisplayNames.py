@@ -10,6 +10,7 @@ HERO_DISPLAY_NAMES = {
     "cassidy": "Cassidy",
     "dmon": "D.Mon",
     "dva": "D.Va",
+    "doctrine": "Doctrine",
     "domina": "Domina",
     "doomfist": "Doomfist",
     "echo": "Echo",
