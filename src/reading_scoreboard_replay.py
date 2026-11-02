@@ -548,7 +548,6 @@ def get_replays():
     Ensures there is a replay code available for the map and that the game version is correct.
     """
     url = f"https://owtv.gg/api/match-map"
-
     response = api_request(
         method="GET",
         url=url,
@@ -564,7 +563,6 @@ def get_replays():
             ("limit", "1"),
         ],
     )
-
     response.raise_for_status()
     datas = response.json()
 
@@ -572,25 +570,28 @@ def get_replays():
         return []
     data = datas["docs"][0]
 
-    if data["winningTeam"]["id"] == data["blueTeam"]["id"]:
-        if data["team1Score"] > data["team2Score"]:
-            blue_score = data["team1Score"]
-            red_score = data["team2Score"]
+    if data["winningTeam"]:
+        if data["winningTeam"]["id"] == data["blueTeam"]["id"]:
+            if data["team1Score"] > data["team2Score"]:
+                blue_score = data["team1Score"]
+                red_score = data["team2Score"]
+            else:
+                red_score = data["team1Score"]
+                blue_score = data["team2Score"]
         else:
-            red_score = data["team1Score"]
-            blue_score = data["team2Score"]
+            if data["team1Score"] > data["team2Score"]:
+                red_score = data["team1Score"]
+                blue_score = data["team2Score"]
+            else:
+                blue_score = data["team1Score"]
+                red_score = data["team2Score"]
     else:
-        if data["team1Score"] > data["team2Score"]:
-            red_score = data["team1Score"]
-            blue_score = data["team2Score"]
-        else:
-            blue_score = data["team1Score"]
-            red_score = data["team2Score"]
+        blue_score = data["team1Score"]
+        red_score = data["team2Score"]
 
     replay = [data["match"]["id"], data["id"], data["replayCode"], data["blueTeam"]["id"], data["redTeam"]["id"], blue_score, red_score,
                   data["map"]["mode"], data["map"]["name"], data["blueTeam"]["name"], data["redTeam"]["name"], data["playerStats"]["docs"],
               data["match"]["team1"]["id"], data["match"]["team2"]["id"]]
-
     return replay
 
 def load_templates():
@@ -656,14 +657,31 @@ def run_reader(state=None):
 
         heroes[hero["name"]] = hero["id"]
 
+    response = api_request(
+        method="GET",
+        url=f"https://owtv.gg/api/hero-perk",
+        headers={"X-API-Key": API_KEY,},
+        params=[
+            ("where[perkType][equals]", "minor"),
+            ("limit", "200"),
+        ]
+    )
+    response.raise_for_status()
+    datas = response.json()
+    minor_perks = datas["docs"]
 
-    temp = ["KCGR1D", "TTYCNM", "PXWRMG", "40CS88", "M472CJ", "CT53T4", "13EZRC", "FS2WRR", "E9ZMAP",
-                             "5S0AVK", "6NW4CT", "3Q1X5E", "PYVA1S", "H3XDQ2", "88090H", "XPKKTQ", "9BAH0M", "A6YKYA",
-                             "YCDA3T", "YXXW4H", "C71PWE", "WP5MAY", "ZJ7J5T",
-                             "C7CRFY", "FFK803", "531F7J", "RFTV49", "546GS6", "H9WE1J", "MQ2S7T", "453E18", "9QDTHN",
-                             "QX89NE", "240MF2", "R0BMYD", "ANYER2", "D4Y0CV", "2CQ6N4", "SVRZJ3", "4Q4NWV", "9G7VT4",
-                             "NAV9NV", "905G8F", "DRPE61", "BVE5W1", "7WT7GJ", "03XTPM", "B0YPRN", "BYKC1D",
-                             "FP8JPG", "1VN910", "8DJK0T", "36GRW9"]
+    response = api_request(
+        method="GET",
+        url=f"https://owtv.gg/api/hero-perk",
+        headers={"X-API-Key": API_KEY, },
+        params=[
+            ("where[perkType][equals]", "major"),
+            ("limit", "200"),
+        ]
+    )
+    response.raise_for_status()
+    datas = response.json()
+    major_perks = datas["docs"]
 
     while True:
         replay = get_replays()
@@ -970,7 +988,7 @@ def run_reader(state=None):
                                                                              left_team_id=replay[3], right_team_id=replay[4],
                                                                              map_type=replay[7], players=players, heroes=heroes,
                                                                              match_map_id=replay[1], team1_id=replay[12], team2_id=replay[13],
-                                                                             player_accs=player_accs)
+                                                                             player_accs=player_accs, minor_perks=minor_perks, major_perks=major_perks)
             player_map_stats = replay[11]
 
             player_hero_map_stats_url = "https://owtv.gg/api/player-map-stats-hero"
@@ -984,7 +1002,8 @@ def run_reader(state=None):
                                     player_map_stat_hero = {"playerMapStats": player["id"], "hero":hero_id, "playtime": stats["seconds"],
                                                             "totalElims": stats["eliminations"], "totalAssists": stats["assists"], "totalDeaths": stats["deaths"],
                                                             "totalDmg": stats["damage"], "totalHeal": stats["healing"], "totalMit": stats["mitigated"],
-                                                            "fightsTotal": log["fight_starts"], "totalUltsUsed": log["ults_used"], "totalUltChargeTime": log["total_charge_time"]}
+                                                            "fightsTotal": log["fight_starts"], "totalUltsUsed": log["ults_used"], "totalUltChargeTime": log["total_charge_time"],
+                                                            "minorPerks": log["minorPerks"], "majorPerks": log["majorPerks"]}
 
                                     response = api_request(
                                         method="post",

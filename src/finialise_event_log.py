@@ -297,6 +297,8 @@ def summarize_ults(charge_events, usage_events, fight_start_counts, player_accs,
             "ults_used": s["ults_used"],
             "total_charge_time": s["total_charge_time"],
             "fight_starts": s["fight_starts"],
+            "minorPerks": [],
+            "majorPerks": [],
         }
         for (player_id, hero_id), s in stats.items()
     ]
@@ -494,70 +496,122 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     df["round_id"] = df["time"].apply(assign_round)
 
-    # One list containing BOTH minor and major perk events
     perk_events = []
 
-    for (player_id, round_id), group in df.groupby(
-            ["player_id", "round_id"]
-    ):
+    # Process each player chronologically, without resetting perk state
+    # when moving between rounds.
+    for player_id, group in df.groupby("player_id"):
+
         group = group.sort_values(["time", "original_index"])
 
-        # Total time spent on each hero during this round
+        # Per-round tracking
         hero_time_acc = {}
-
-        # Track perks already unlocked for this player/round
-        # (hero_id, perk_type)
         unlocked_perks = set()
+
+        # Track the last observed perk for each hero and perk type.
+        # Key: (hero_id, perk_type)
+        last_perk_values = {}
+
+        # Perks carried over from the previous round.
+        # These must not be recorded again until cleared or changed.
+        blocked_perks = {}
 
         last_time = None
         last_hero = None
+        current_round = None
 
         for _, row in group.iterrows():
 
             t = row["time"]
             hero_id = row["hero_id"]
+            round_id = row["round_id"]
 
             if pd.isna(hero_id):
                 continue
 
             hero_id = int(hero_id)
 
+            # Detect a new round
+            if current_round is None:
+                current_round = round_id
+
+            elif round_id != current_round:
+
+                # Remember which perks were displayed at the end
+                # of the previous round.
+                blocked_perks = {
+                    key: value
+                    for key, value in last_perk_values.items()
+                    if value is not None
+                }
+
+                # Reset round-specific tracking
+                unlocked_perks.clear()
+                hero_time_acc.clear()
+
+                last_time = None
+                last_hero = None
+
+                current_round = round_id
+
             # TIME ACCUMULATION
             if last_time is not None and last_hero is not None:
                 dt = t - last_time
 
                 hero_time_acc[last_hero] = (
-                        hero_time_acc.get(last_hero, 0) + dt
+                    hero_time_acc.get(last_hero, 0) + dt
                 )
 
             # PERK DETECTION
             for perk_type in ("minor", "major"):
-                perk_name = row[f"{perk_type}_perk"]
-                # No perk selected
-                if pd.isna(perk_name):
-                    continue
 
-                # Identify this specific perk type for this hero
+                perk_name = row[f"{perk_type}_perk"]
                 perk_key = (hero_id, perk_type)
 
-                # Already recorded this hero's perk this round
-                if perk_key in unlocked_perks:
+                # No perk currently displayed.
+                # This means any previous-round selection has been cleared.
+                if pd.isna(perk_name) or not str(perk_name).strip():
+
+                    last_perk_values[perk_key] = None
+                    blocked_perks.pop(perk_key, None)
                     continue
 
-                # Total time spent playing this hero this round
+                perk_name = str(perk_name).strip()
+
+                # Already recorded this perk type for this hero this round.
+                if perk_key in unlocked_perks:
+                    last_perk_values[perk_key] = perk_name
+                    continue
+
+                # Check whether this is simply the previous round's perk.
+                previous_perk = blocked_perks.get(perk_key)
+
+                if previous_perk is not None:
+
+                    if perk_name.casefold() == previous_perk.casefold():
+
+                        # Same perk carried over from previous round.
+                        last_perk_values[perk_key] = perk_name
+                        continue
+
+                    # The perk has changed, so it is a new selection.
+                    blocked_perks.pop(perk_key, None)
+
+                # Record the new perk selection.
                 total_time = hero_time_acc.get(hero_id, 0)
-                # Add event
+
                 perk_events.append((
                     int(player_id),
                     hero_id,
                     perk_type,
-                    str(perk_name),
+                    perk_name,
                     int(t),
                     int(total_time),
                     row["hero_name_clean"]
                 ))
-                # Mark as recorded
+
                 unlocked_perks.add(perk_key)
+                last_perk_values[perk_key] = perk_name
 
             # UPDATE HERO TRACKING
             last_time = t
@@ -565,7 +619,7 @@ def process_and_save_perks(df: pd.DataFrame, map_id: int, hero_map: dict, round_
 
     return perk_events
 
-def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id, team1_id, team2_id, player_accs):
+def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id, right_team_id, map_type, players, heroes, match_map_id, team1_id, team2_id, player_accs, minor_perks, major_perks):
     add_to_log = []
     csv_path = Path(csv_path)
     with open(csv_path, "r") as f:
@@ -623,6 +677,19 @@ def main(csv_path, event_log_path, left_team_name, right_team_name, left_team_id
         for i in range(len(perks)):
             log = f"[{perks[i][4]}], {players[perks[i][0]]} has selected {perks[i][2]} perk [{perks[i][3]}] for {perks[i][6]}"
             add_to_log.append(log)
+
+            for summary in ult_summary:
+                if (summary["player_id"] == perks[i][0]) and (summary["hero_id"] == perks[i][1]):
+                    if perks[i][2] == "minor":
+                        for perk in minor_perks:
+                            if perk["name"] == perks[i][3]:
+                                summary["minorPerks"].append(perk["id"])
+                                continue
+                    else:
+                        for perk in major_perks:
+                            if perk["name"] == perks[i][3]:
+                                summary["majorPerks"].append(perk["id"])
+                                continue
 
     add_lines_chronologically(event_log_path, add_to_log, num_rounds)
     format_hero_names_in_log(event_log_path)
