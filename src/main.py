@@ -200,7 +200,7 @@ class MainWindow(QMainWindow):
         instructions_title.setObjectName("sectionTitle")
 
         instructions_text = QLabel(
-            "Make sure you have colours set to DEFAULT BLUE AND DEFAULT RED. "
+            "Make sure you have team colours correct in this app's settings. "
             "Open the Replays tab in your career profile. "
             "Press RUN to begin processing the replays. "
             "Tab back into the game window. "
@@ -660,29 +660,55 @@ class SettingsDialog(QDialog):
         layout.setContentsMargins(24, 22, 24, 20)
         layout.setSpacing(10)
 
-        title = QLabel("GAME RESOLUTION")
-        title.setObjectName("sectionTitle")
+        title1 = QLabel("GAME RESOLUTION")
+        title1.setObjectName("sectionTitle")
+        self.combo1 = QComboBox()
+        self.combo1.addItems(settings.RESOLUTIONS)
+        self.combo1.setCurrentText(settings.get("resolution"))
+        hint1 = QLabel("Set this to the resolution of the monitor that Overwatch is running on.")
+        hint1.setObjectName("instructions")
+        hint1.setWordWrap(True)
 
-        self.combo = QComboBox()
-        self.combo.addItems(settings.RESOLUTIONS)
-        self.combo.setCurrentText(settings.get("resolution"))
+        title2 = QLabel("ALLY COLOUR")
+        title2.setObjectName("sectionTitle")
+        self.combo2 = QComboBox()
+        self.combo2.addItems(settings.COLOURS)
+        self.combo2.setCurrentText(settings.get("ally_colour"))
+        hint2 = QLabel("Set this to the colour you have set for allies.")
+        hint2.setObjectName("instructions")
+        hint2.setWordWrap(True)
 
-        hint = QLabel("Set this to the resolution of the monitor that Overwatch is running on.")
-        hint.setObjectName("instructions")
-        hint.setWordWrap(True)
+        title3 = QLabel("ENEMY COLOUR")
+        title3.setObjectName("sectionTitle")
+        self.combo3 = QComboBox()
+        self.combo3.addItems(settings.COLOURS)
+        self.combo3.setCurrentText(settings.get("enemy_colour"))
+        hint3 = QLabel("Set this to the colour you have set for enemies.")
+        hint3.setObjectName("instructions")
+        hint3.setWordWrap(True)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
 
-        layout.addWidget(title)
-        layout.addWidget(self.combo)
-        layout.addWidget(hint)
+        layout.addWidget(title1)
+        layout.addWidget(self.combo1)
+        layout.addWidget(hint1)
         layout.addSpacing(8)
+        layout.addWidget(title2)
+        layout.addWidget(self.combo2)
+        layout.addWidget(hint2)
+        layout.addSpacing(8)
+        layout.addWidget(title3)
+        layout.addWidget(self.combo3)
+        layout.addWidget(hint3)
+        layout.addSpacing(10)
         layout.addWidget(buttons)
 
     def save(self):
-        settings.set("resolution", self.combo.currentText())
+        settings.set("resolution", self.combo1.currentText())
+        settings.set("ally_colour", self.combo2.currentText())
+        settings.set("enemy_colour", self.combo3.currentText())
         self.accept()
 
 # Application
