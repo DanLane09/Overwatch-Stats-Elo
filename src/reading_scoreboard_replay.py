@@ -551,7 +551,7 @@ def get_replays():
         headers={"X-API-Key": API_KEY,},
         params=[
             ("where[replayCode][exists]", "true"),
-            ("where[match.version][equals]", "2.25.1.0.154905"),
+            ("where[match.version][equals]", "2.25.1.0.155284"),
             ("where[or][0][replayParsed][exists]", "false"),
             ("where[or][1][replayParsed][equals]", "retry"),
             ("where[blueTeam][exists]", "true"),
